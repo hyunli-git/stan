@@ -300,7 +300,8 @@ const generateFallbackBriefing = async (stan: Stan): Promise<BriefingContent> =>
     sources: [
       `https://search.naver.com/search.naver?query=${encodeURIComponent(stan.name + ' 최신뉴스')}`,
       `https://www.google.com/search?q=${encodeURIComponent(stan.name + ' latest news today')}`
-    ]
+    ],
+    topics: []
   };
 };
 
