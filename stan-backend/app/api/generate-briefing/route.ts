@@ -289,7 +289,7 @@ const generateFallbackBriefing = async (stan: Stan): Promise<BriefingContent> =>
     ]
   };
 
-  const categoryTemplates = templates[stan.categories.name] || templates['Music'];
+  const categoryTemplates = templates[stan.categories.name as keyof typeof templates] || templates['Music'];
   const randomTemplate = categoryTemplates[Math.floor(Math.random() * categoryTemplates.length)];
   
   const summary = randomTemplate.split('.')[0] + '.';
