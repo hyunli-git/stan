@@ -1,105 +1,113 @@
+import React from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, Button, Alert } from 'react-native';
-import { useState, useEffect } from 'react';
-import { API_URL } from './config/api';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { NavigationContainer } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
-export default function App() {
-  const [apiStatus, setApiStatus] = useState<string>('Checking...');
-  const [supabaseStatus, setSupabaseStatus] = useState<string>('Not tested');
+// Import screens
+import LoginScreen from './screens/LoginScreen';
+import SignupScreen from './screens/SignupScreen';
+import OnboardingScreen from './screens/OnboardingScreen';
+import HomeScreen from './screens/HomeScreen';
+import AddStanScreen from './screens/AddStanScreen';
+import BriefingScreen from './screens/BriefingScreen';
+import ProfileScreen from './screens/ProfileScreen';
+import PromptManagerScreen from './screens/PromptManagerScreen';
 
-  // Test API connection on load
-  useEffect(() => {
-    testAPIConnection();
-  }, []);
+// Import test app for development
+import TestApp from './TestApp';
 
-  const testAPIConnection = async () => {
-    try {
-      const response = await fetch(`${API_URL}/api/health`);
-      const data = await response.json();
-      setApiStatus(`✅ Connected: ${data.message}`);
-    } catch (error) {
-      setApiStatus('❌ API Connection Failed');
-    }
-  };
+const Stack = createStackNavigator();
+const Tab = createBottomTabNavigator();
 
-  const testSupabase = async () => {
-    try {
-      // This will test if Supabase is properly configured
-      const { supabase } = await import('./lib/supabase');
-      const { data, error } = await supabase.from('categories').select('*').limit(1);
-      
-      if (error) throw error;
-      setSupabaseStatus('✅ Supabase Connected');
-      Alert.alert('Success', `Found ${data?.length || 0} categories`);
-    } catch (error: any) {
-      setSupabaseStatus('❌ Supabase Error');
-      Alert.alert('Error', error.message);
-    }
-  };
-
+function MainTabs() {
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>🌟 STAN</Text>
-      <Text style={styles.subtitle}>Daily AI briefings for everything you stan</Text>
-      
-      <View style={styles.statusContainer}>
-        <Text style={styles.statusTitle}>System Status:</Text>
-        <Text style={styles.status}>Backend API: {apiStatus}</Text>
-        <Text style={styles.status}>Supabase: {supabaseStatus}</Text>
-      </View>
-
-      <View style={styles.buttonContainer}>
-        <Button title="Test Supabase Connection" onPress={testSupabase} />
-      </View>
-
-      <Text style={styles.footer}>Ready to build your app! 🚀</Text>
-      <StatusBar style="auto" />
-    </View>
+    <Tab.Navigator 
+      screenOptions={{ 
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: '#fff',
+          borderTopColor: '#f0f0f0',
+          paddingBottom: 8,
+          paddingTop: 8,
+          height: 80,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+        },
+        tabBarActiveTintColor: '#000',
+        tabBarInactiveTintColor: '#666',
+      }}
+    >
+      <Tab.Screen 
+        name="Home" 
+        component={HomeScreen}
+        options={{
+          tabBarLabel: 'Home',
+          tabBarIcon: () => '🏠',
+        }}
+      />
+      <Tab.Screen 
+        name="AddStan" 
+        component={AddStanScreen}
+        options={{
+          tabBarLabel: 'Add Stan',
+          tabBarIcon: () => '➕',
+        }}
+      />
+      <Tab.Screen 
+        name="Profile" 
+        component={ProfileScreen}
+        options={{
+          tabBarLabel: 'Profile',
+          tabBarIcon: () => '👤',
+        }}
+      />
+    </Tab.Navigator>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  title: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 40,
-    textAlign: 'center',
-  },
-  statusContainer: {
-    backgroundColor: '#f5f5f5',
-    padding: 20,
-    borderRadius: 10,
-    marginBottom: 30,
-    minWidth: 300,
-  },
-  statusTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  status: {
-    fontSize: 14,
-    marginVertical: 5,
-  },
-  buttonContainer: {
-    marginVertical: 20,
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 50,
-    fontSize: 14,
-    color: '#999',
-  },
-});
+function AppNavigator() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return null; // Or a loading screen
+  }
+
+  return (
+    <NavigationContainer>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {!user ? (
+          // Auth screens
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Signup" component={SignupScreen} />
+          </>
+        ) : (
+          // Main app screens
+          <>
+            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+            <Stack.Screen name="MainTabs" component={MainTabs} />
+            <Stack.Screen name="Briefing" component={BriefingScreen} />
+            <Stack.Screen name="PromptManager" component={PromptManagerScreen} />
+            <Stack.Screen name="TestApp" component={TestApp} />
+          </>
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AuthProvider>
+        <AppNavigator />
+        <StatusBar style="auto" />
+      </AuthProvider>
+    </SafeAreaProvider>
+  );
+}

@@ -125,6 +125,9 @@ CREATE POLICY "Users can delete their own stans" ON public.stans
 CREATE POLICY "Users can view their own briefings" ON public.briefings
   FOR SELECT USING (auth.uid() = user_id);
 
+CREATE POLICY "Users can create their own briefings" ON public.briefings
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
 CREATE POLICY "Users can update their own briefings" ON public.briefings
   FOR UPDATE USING (auth.uid() = user_id);
 

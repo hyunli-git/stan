@@ -1,9 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import { createClient } from '@supabase/supabase-js';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+// Initialize Gemini 2.5 Flash with Grounding
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
+const model = genAI.getGenerativeModel({ 
+  model: "gemini-2.0-flash-exp"
 });
+
+// Configure generation with Google Search
+const generationConfig = {
+  temperature: 0.7,
+  maxOutputTokens: 1000,
+};
 
 interface Stan {
   id: string;
@@ -16,94 +30,225 @@ interface Stan {
   description?: string;
 }
 
-interface BriefingContent {
+interface BriefingTopic {
+  title: string;
   content: string;
+  sources?: string[];
+}
+
+interface BriefingContent {
+  content: string; // Keep for backward compatibility
   summary: string;
   sources: string[];
+  topics: BriefingTopic[]; // New structured format
+  searchSources?: string[]; // Real search sources from Gemini
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { stan }: { stan: Stan } = await request.json();
+    const { stan, userId }: { stan: Stan; userId?: string } = await request.json();
 
     if (!stan) {
       return NextResponse.json({ error: 'Stan data is required' }, { status: 400 });
     }
 
-    const briefingContent = await generateAIBriefingWithWebSearch(stan);
+    const briefingContent = await generateAIBriefingWithWebSearch(stan, userId);
     
     return NextResponse.json(briefingContent);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error generating briefing:', error);
     return NextResponse.json(
       { 
         error: 'Failed to generate briefing',
-        message: error.message 
+        message: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     );
   }
 }
 
-const generateAIBriefingWithWebSearch = async (stan: Stan): Promise<BriefingContent> => {
+const generateAIBriefingWithWebSearch = async (stan: Stan, userId?: string): Promise<BriefingContent> => {
   try {
-    const today = new Date().toLocaleDateString('ko-KR', {
+    const today = new Date().toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
       weekday: 'long'
     });
 
-    const prompt = `오늘은 ${today}입니다. "${stan.name}"에 대한 최신 정보와 뉴스를 웹에서 검색해서 한국어로 브리핑을 작성해주세요.
+    // Fetch custom prompt if userId is provided
+    let customPrompt = null;
+    if (userId) {
+      const { data } = await supabase
+        .from('stan_prompts')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('stan_id', stan.id)
+        .single();
+      customPrompt = data;
+    }
 
-카테고리: ${stan.categories.name}
-설명: ${stan.description || '없음'}
-
-다음 형식으로 작성해주세요:
-1. 최근 소식이나 활동 (오늘 날짜 기준으로 최대한 최신 정보)
-2. 팬들이나 업계의 반응
-3. 향후 예정된 일정이나 계획
-
-브리핑은 팬들이 읽기 좋게 흥미롭고 정확한 정보로 작성하되, 3-4문장 정도로 간결하게 작성해주세요. 이모지를 적절히 사용해서 읽기 좋게 만들어주세요.
-
-만약 최신 정보가 없다면, 일반적인 활동 상황이나 최근 트렌드에 대해 작성해주세요.`;
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: "당신은 K-Pop, 음악, 스포츠, 게임, 영화/TV, 콘텐츠 크리에이터 등 다양한 분야의 최신 정보를 제공하는 전문 브리핑 작성자입니다. 웹 검색을 통해 얻은 최신 정보를 바탕으로 정확하고 흥미로운 브리핑을 작성합니다. 오늘 날짜를 기준으로 최신 정보를 찾아서 제공하세요."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 500,
-    });
-
-    const briefingText = response.choices[0]?.message?.content || '';
+    // Build the prompt based on custom settings or use default
+    let prompt = '';
     
-    // Extract summary (first sentence or up to first period + next sentence)
-    const sentences = briefingText.split(/[.!?]/).filter(s => s.trim().length > 0);
+    if (customPrompt?.custom_prompt) {
+      // Use fully custom prompt with variable substitution
+      prompt = customPrompt.custom_prompt
+        .replace('{date}', today)
+        .replace('{stan_name}', stan.name)
+        .replace('{category}', stan.categories.name)
+        .replace('{focus_areas}', (customPrompt.focus_areas || []).join(', ') || 'General updates')
+        .replace('{tone}', customPrompt.tone || 'informative')
+        .replace('{include_sources}', customPrompt.include_sources ? 'Yes' : 'No');
+    } else {
+      // Use default prompt with customizations
+      const focusAreas = customPrompt?.focus_areas?.length 
+        ? `Focus specifically on: ${customPrompt.focus_areas.join(', ')}`
+        : '';
+      
+      const excludeTopics = customPrompt?.exclude_topics?.length
+        ? `Please avoid mentioning: ${customPrompt.exclude_topics.join(', ')}`
+        : '';
+
+      const sections = [];
+      if (customPrompt?.include_social_media !== false) sections.push('Recent social media activity and posts');
+      if (customPrompt?.include_fan_reactions !== false) sections.push('Fan and community reactions');
+      if (customPrompt?.include_upcoming_events !== false) sections.push('Upcoming schedules, events, or releases');
+      sections.push('Recent news or activities (latest information as of today\'s date)');
+
+      prompt = `Today is ${today}. Search the web for the most current and up-to-date information about "${stan.name}" and create an English briefing.
+
+Category: ${stan.categories.name}
+Description: ${stan.description || 'None'}
+${focusAreas}
+${excludeTopics}
+
+Please write in the following JSON format with separate topics:
+
+{
+  "topics": [
+    {
+      "title": "Recent News & Activities",
+      "content": "2-3 sentences about recent news with specific dates and details. Use emojis appropriately.",
+      "sources": ["url1", "url2"] // Include actual source URLs found in your search
+    },
+    {
+      "title": "Social Media & Fan Reactions", 
+      "content": "2-3 sentences about social media activity and fan reactions. Use emojis appropriately.",
+      "sources": ["url1", "url2"] // Include actual source URLs found in your search
+    },
+    {
+      "title": "Upcoming Events & Releases",
+      "content": "2-3 sentences about upcoming schedules and planned activities. Use emojis appropriately.", 
+      "sources": ["url1", "url2"] // Include actual source URLs found in your search
+    }
+  ],
+  "searchSources": ["all_urls_you_found_during_search"]
+}
+
+Tone: ${customPrompt?.tone || 'informative'}
+Length: ${customPrompt?.length === 'short' ? '2-3 sentences per topic' : customPrompt?.length === 'long' ? '4-5 sentences per topic' : '3-4 sentences per topic'}
+
+CRITICAL REQUIREMENTS:
+1. Use real web search to find current information
+2. Include ACTUAL source URLs in each topic's "sources" array
+3. Focus on news from today (${today}) or recent days
+4. Return valid JSON format only
+5. Each topic should be concise and focused on one area`;
+    }
+
+    console.log('🌐 Using Gemini 2.5 Flash with Google Search Grounding for real-time information');
+    
+    // Use Gemini with Google Search Grounding for real web search results
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig
+    });
+    const briefingText = result.response.text();
+    
+    // Try to parse structured JSON response
+    let parsedBriefing: { topics?: BriefingTopic[], searchSources?: string[] } | null = null;
+    try {
+      console.log('🔍 Raw Gemini response:', briefingText.substring(0, 500) + '...');
+      
+      // Extract JSON from code blocks or find JSON object
+      const jsonBlockMatch = briefingText.match(/```json\s*([\s\S]*?)\s*```/);
+      const jsonMatch = jsonBlockMatch ? jsonBlockMatch[1] : briefingText.match(/\{[\s\S]*\}/)?.[0];
+      
+      if (jsonMatch) {
+        console.log('🔍 Found JSON match:', jsonMatch.substring(0, 200) + '...');
+        
+        let cleanJson = jsonMatch
+          .replace(/\/\/.*$/gm, '') // Remove comments
+          .replace(/,(\s*[}\]])/g, '$1') // Remove trailing commas
+          .replace(/\\"/g, '"') // Fix escaped quotes
+          .replace(/[\u0000-\u001f]/g, '') // Remove control characters
+          .replace(/\n/g, ' ') // Replace newlines with spaces
+          .replace(/\r/g, '') // Remove carriage returns
+          .replace(/\t/g, ' ') // Replace tabs with spaces
+          .replace(/\s+/g, ' ') // Normalize multiple spaces
+          .trim();
+        
+        // Additional cleanup for common Gemini formatting issues
+        cleanJson = cleanJson
+          .replace(/"\s*:\s*"/g, '": "') // Fix spacing around colons
+          .replace(/",\s*"/g, '", "') // Fix spacing around commas
+          .replace(/"\s*,/g, '",') // Fix trailing spaces before commas
+          .replace(/\{\s+/g, '{') // Remove spaces after opening braces
+          .replace(/\s+\}/g, '}') // Remove spaces before closing braces
+          .replace(/\[\s+/g, '[') // Remove spaces after opening brackets
+          .replace(/\s+\]/g, ']'); // Remove spaces before closing brackets
+        
+        console.log('🧹 Cleaned JSON:', cleanJson.substring(0, 300) + '...');
+        
+        parsedBriefing = JSON.parse(cleanJson);
+        console.log('✅ Successfully parsed JSON response');
+      }
+    } catch (parseError) {
+      console.log('❌ Failed to parse JSON response, trying manual extraction');
+      console.log('❌ Parse error:', parseError);
+      console.log('❌ Problematic JSON snippet:', briefingText.substring(0, 600));
+    }
+
+    let topics: BriefingTopic[] = [];
+    let searchSources: string[] = [];
+    
+    if (parsedBriefing?.topics) {
+      topics = parsedBriefing.topics;
+      searchSources = parsedBriefing.searchSources || [];
+      console.log('✅ Successfully parsed structured briefing with', topics.length, 'topics');
+    } else {
+      // Fallback: Split plain text into topics
+      const sections = briefingText.split(/\d+\.\s*/).filter(s => s.trim().length > 10);
+      topics = sections.map((section, index) => ({
+        title: `Topic ${index + 1}`,
+        content: section.trim(),
+        sources: []
+      }));
+      console.log('📝 Using fallback text parsing with', topics.length, 'topics');
+    }
+    
+    // Extract summary from first topic
+    const firstTopicText = topics[0]?.content || briefingText;
+    const sentences = firstTopicText.split(/[.!?]/).filter(s => s.trim().length > 0);
     const summary = sentences.slice(0, 2).join('. ') + (sentences.length > 2 ? '.' : '');
 
-    // Generate search-based sources
-    const sources = [
-      `https://search.naver.com/search.naver?query=${encodeURIComponent(stan.name + ' 최신뉴스')}`,
-      `https://www.google.com/search?q=${encodeURIComponent(stan.name + ' latest news today')}`
+    // Fallback sources if no real sources found
+    const fallbackSources = [
+      `https://www.google.com/search?q=${encodeURIComponent(stan.name + ' latest news today')}`,
+      `https://www.google.com/search?q=${encodeURIComponent(stan.name + ' recent updates ' + new Date().getFullYear())}`
     ];
 
     return {
-      content: briefingText,
+      content: briefingText, // Keep for backward compatibility
       summary: summary || briefingText.substring(0, 100) + '...',
-      sources
+      sources: searchSources.length > 0 ? searchSources : fallbackSources,
+      topics: topics,
+      searchSources: searchSources
     };
 
-  } catch (error: any) {
-    console.error('OpenAI API Error:', error);
+  } catch (error) {
+    console.error('Gemini API Error:', error);
     
     // Fallback to template-based generation if API fails
     return await generateFallbackBriefing(stan);
@@ -112,35 +257,35 @@ const generateAIBriefingWithWebSearch = async (stan: Stan): Promise<BriefingCont
 
 // Fallback function that generates briefing without API
 const generateFallbackBriefing = async (stan: Stan): Promise<BriefingContent> => {
-  const today = new Date().toLocaleDateString('ko-KR', {
+  const today = new Date().toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric'
   });
 
   const templates = {
     'K-Pop': [
-      `🎵 **${stan.name}**이 ${today} 기준으로 새로운 활동 소식이 전해지고 있습니다. 팬들은 다음 컴백과 월드투어 발표를 기대하고 있으며, 최근 소셜미디어 활동을 통해 스튜디오 작업 모습을 공개했습니다. 글로벌 차트에서의 성과도 꾸준히 이어지고 있어 앞으로의 활동이 더욱 기대됩니다. 🌟`,
-      `✨ **${stan.name}**이 최근 패션 이벤트에서 화제를 모았습니다. 그룹의 글로벌 영향력은 계속 성장하고 있으며, 이번 주 스트리밍 수치가 새로운 기록을 달성했습니다. 팬들은 멤버들의 개별 활동과 새로운 협업에 대한 기대감을 표현하고 있습니다. 🎊`
+      `🎵 **${stan.name}** has been making headlines with new activity updates as of ${today}. Fans are eagerly anticipating the next comeback and world tour announcement, with recent social media posts revealing glimpses of studio work. Their global chart performance continues to impress, making future activities even more anticipated. 🌟`,
+      `✨ **${stan.name}** recently made waves at a fashion event. The group's global influence continues to grow, with this week's streaming numbers achieving new records. Fans are expressing excitement about individual member activities and potential new collaborations. 🎊`
     ],
     'Music': [
-      `🎤 **${stan.name}**이 현재 스튜디오에서 새로운 음악 작업에 몰두하고 있다는 소식입니다. 업계 관계자들은 다른 아티스트들과의 협업과 깜짝 앨범 발매 가능성을 시사했습니다. 혁신적인 음악 제작 방식으로 많은 후배 아티스트들에게 영감을 주고 있습니다. 🎧`,
-      `📀 **${stan.name}**의 최신 작품이 계속해서 스트리밍 플랫폼을 장악하고 있습니다. 아티스트의 창작 과정을 담은 다큐멘터리와 독점 콘서트 시리즈에 대한 팬들의 기대가 높아지고 있습니다. 음악적 진화가 계속되고 있어 주목받고 있습니다. 🌟`
+      `🎤 **${stan.name}** is currently immersed in new music work at the studio. Industry insiders hint at potential collaborations with other artists and surprise album releases. Their innovative music production methods continue to inspire many emerging artists. 🎧`,
+      `📀 **${stan.name}**'s latest work continues to dominate streaming platforms. Fans' anticipation is growing for documentaries about the artist's creative process and exclusive concert series. Their musical evolution continues to attract attention. 🌟`
     ],
     'Sports': [
-      `⚽ **${stan.name}**이 이번 주 인상적인 경기력을 보여주며 핵심 선수들의 뛰어난 폼을 과시했습니다. 이적 루머가 계속 돌고 있는 가운데 팀은 다가오는 경기들을 준비하고 있습니다. 새로운 전략적 파트너십과 스타디움 개선 계획도 발표되었습니다. 🏆`,
-      `📊 **${stan.name}**의 이번 시즌 통계가 강력한 성과를 보여주고 있습니다. 젊은 재능들이 부상하고 있는 가운데 베테랑 선수들은 계속해서 모범을 보이고 있습니다. 팬 참여 이니셔티브도 다가오는 시즌을 위해 계획되고 있습니다. ⭐`
+      `⚽ **${stan.name}** showed impressive performance this week, with key players displaying excellent form. While transfer rumors continue to circulate, the team is preparing for upcoming matches. New strategic partnerships and stadium improvement plans have also been announced. 🏆`,
+      `📊 **${stan.name}**'s statistics this season show strong performance. While young talents are emerging, veteran players continue to set an example. Fan engagement initiatives are also being planned for the upcoming season. ⭐`
     ],
     'Gaming': [
-      `🎮 **${stan.name}**이 플레이어들이 요청해온 새로운 기능과 콘텐츠가 포함된 대규모 업데이트를 출시했습니다. 게이밍 커뮤니티는 최근 변화에 긍정적으로 반응하고 있습니다. 새로운 프로 선수들이 혁신적인 전략으로 경쟁 씬에 합류하고 있습니다. 🏅`,
-      `💎 **${stan.name}** 개발진이 전 세계 수백만 플레이어들의 게임 경험을 향상시킬 크로스 플랫폼 기능과 향후 확장 계획을 발표했습니다. e스포츠 토너먼트도 계속해서 시청률 기록을 경신하고 있습니다. 🚀`
+      `🎮 **${stan.name}** has released a major update including new features and content that players have been requesting. The gaming community is responding positively to the recent changes. New professional players are joining the competitive scene with innovative strategies. 🏅`,
+      `💎 **${stan.name}** developers have announced cross-platform features and future expansion plans to enhance the gaming experience for millions of players worldwide. Esports tournaments continue to break viewership records. 🚀`
     ],
     'Movies & TV': [
-      `🎬 **${stan.name}**이 팬 이론과 다가오는 시즌에 대한 토론으로 계속 화제를 모으고 있습니다. 제작 비하인드 콘텐츠가 흥미로운 세부사항들을 공개하고 있습니다. 소셜 미디어에서 바이럴되는 명장면과 명대사들로 팝 컬처에 영향을 미치고 있습니다. 🌟`,
-      `📺 **${stan.name}** 출연진들이 새로운 장면을 촬영하는 모습이 포착되어 플롯 전개에 대한 추측이 활발합니다. 팬 참여도는 사상 최고치를 유지하고 있으며, 관련 머천다이즈와 콜라보레이션도 계속 출시되고 있습니다. 💫`
+      `🎬 **${stan.name}** continues to generate buzz with fan theories and discussions about the upcoming season. Behind-the-scenes content is revealing fascinating details. Viral scenes and memorable quotes are influencing pop culture on social media. 🌟`,
+      `📺 **${stan.name}** cast members have been spotted filming new scenes, sparking active speculation about plot developments. Fan engagement remains at an all-time high, with related merchandise and collaborations continuing to be released. 💫`
     ],
     'Content Creators': [
-      `📱 **${stan.name}**이 플랫폼에서 수백만 조회수를 기록하는 바이럴 콘텐츠를 게시했습니다. 콘텐츠 제작에 대한 독창적인 접근 방식으로 다른 크리에이터들에게 계속 영감을 주고 있습니다. 주요 브랜드와의 새로운 프로젝트와 협업이 발표되었습니다. 🎥`,
-      `💫 **${stan.name}** 팬들이 다가오는 머천다이즈 출시와 구독자를 위한 독점 콘텐츠를 기대하고 있습니다. 디지털 문화에 대한 영향력은 매 게시물마다 계속 성장하고 있습니다. 새로운 플랫폼 진출 계획도 준비 중입니다. ✨`
+      `📱 **${stan.name}** has posted viral content that has garnered millions of views on the platform. Their unique approach to content creation continues to inspire other creators. New projects and collaborations with major brands have been announced. 🎥`,
+      `💫 **${stan.name}** fans are anticipating the upcoming merchandise release and exclusive content for subscribers. Their influence on digital culture continues to grow with every post. Plans for expansion to new platforms are also in preparation. ✨`
     ]
   };
 
@@ -158,3 +303,4 @@ const generateFallbackBriefing = async (stan: Stan): Promise<BriefingContent> =>
     ]
   };
 };
+

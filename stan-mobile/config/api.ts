@@ -1,8 +1,8 @@
-const DEV_API_URL = 'http://localhost:3000';
+const DEV_API_URL = 'http://localhost:3001';
 const PROD_API_URL = 'https://stan-kxbwm4vl5-haleys-projects-1932fed0.vercel.app';
 
-// Use production URL for now since backend is deployed
-export const API_URL = PROD_API_URL;
+// Use localhost for development since Vercel has auth protection
+export const API_URL = DEV_API_URL;
 
 export const endpoints = {
   health: `${API_URL}/api/health`,
