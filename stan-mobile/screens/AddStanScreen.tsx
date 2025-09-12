@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -150,29 +150,41 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
     }
   };
 
-  const toggleStanSelection = (suggestion: StanSuggestion) => {
-    const newSelection = new Set(selectedStans);
-    if (newSelection.has(suggestion.id)) {
-      newSelection.delete(suggestion.id);
-    } else {
-      newSelection.add(suggestion.id);
-    }
-    setSelectedStans(newSelection);
-  };
-
-  const selectSuggestion = toggleStanSelection; // Keep for backward compatibility
-
-  const clearSelections = () => {
-    setSelectedStans(new Set());
-  };
-
-  const selectAllVisible = () => {
-    const newSelection = new Set(selectedStans);
-    filteredSuggestions.forEach(suggestion => {
-      newSelection.add(suggestion.id);
+  const toggleStanSelection = useCallback((suggestion: StanSuggestion) => {
+    console.log('🔄 toggleStanSelection called for:', suggestion.name, 'ID:', suggestion.id);
+    console.log('🔄 Current selected IDs:', Array.from(selectedStans));
+    
+    setSelectedStans(prevSelected => {
+      const newSelection = new Set(prevSelected);
+      if (newSelection.has(suggestion.id)) {
+        console.log('🗑️ Removing from selection');
+        newSelection.delete(suggestion.id);
+      } else {
+        console.log('➕ Adding to selection');
+        newSelection.add(suggestion.id);
+      }
+      
+      console.log('🔄 New selected IDs:', Array.from(newSelection));
+      return newSelection;
     });
-    setSelectedStans(newSelection);
-  };
+  }, []);
+
+
+  const clearSelections = useCallback(() => {
+    console.log('🧼 Clearing all selections');
+    setSelectedStans(new Set());
+  }, []);
+
+  const selectAllVisible = useCallback(() => {
+    console.log('✅ Selecting all visible stans');
+    setSelectedStans(prevSelected => {
+      const newSelection = new Set(prevSelected);
+      filteredSuggestions.forEach(suggestion => {
+        newSelection.add(suggestion.id);
+      });
+      return newSelection;
+    });
+  }, [filteredSuggestions]);
 
   const handleAddStans = async () => {
     console.log('🔄 handleAddStans called', { selectedCount: selectedStans.size });
@@ -267,8 +279,9 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
   };
 
 
-  const renderSuggestion = ({ item }: { item: StanSuggestion }) => {
+  const renderSuggestion = useCallback(({ item }: { item: StanSuggestion }) => {
     const isSelected = selectedStans.has(item.id);
+    console.log('🎨 Rendering:', item.name, 'Selected:', isSelected, 'ID:', item.id);
     
     return (
       <TouchableOpacity
@@ -277,7 +290,10 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
           { borderLeftColor: item.categoryColor },
           isSelected && styles.suggestionCardSelected
         ]}
-        onPress={() => selectSuggestion(item)}
+        onPress={() => {
+          console.log('👆 Pressed:', item.name);
+          toggleStanSelection(item);
+        }}
         activeOpacity={0.7}
       >
         <View style={styles.suggestionHeader}>
@@ -295,7 +311,7 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
         <Text style={styles.suggestionDescription}>{item.description}</Text>
       </TouchableOpacity>
     );
-  };
+  }, [selectedStans, toggleStanSelection]);
 
   if (loadingCategories) {
     return (
@@ -376,7 +392,7 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
             <FlatList
               data={filteredSuggestions}
               renderItem={renderSuggestion}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item) => String(item.id)}
               style={styles.suggestionsList}
               showsVerticalScrollIndicator={true}
               keyboardShouldPersistTaps="handled"
@@ -384,6 +400,7 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
               initialNumToRender={8}
               maxToRenderPerBatch={5}
               windowSize={10}
+              extraData={selectedStans}
               ListFooterComponent={() => <View style={{ height: 20 }} />}
             />
             
