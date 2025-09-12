@@ -7,8 +7,9 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  output: 'standalone',
   experimental: {
-    outputFileTracingRoot: undefined,
+    appDir: true,
   },
   async headers() {
     return [
