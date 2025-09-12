@@ -1,0 +1,15 @@
+{
+  "name": "stan-project",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "cd stan-backend && npm run build",
+    "start": "cd stan-backend && npm start",
+    "dev": "cd stan-backend && npm run dev"
+  },
+  "dependencies": {
+    "next": "15.5.2",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  }
+}
