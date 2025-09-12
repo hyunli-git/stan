@@ -39,12 +39,12 @@ export async function GET() {
 
     const briefingSummary = briefings?.map(b => ({
       id: b.id,
-      stan_name: b.stans?.name,
+      stan_name: (b.stans as any)?.name || 'Unknown Stan',
       date: b.date,
       created_at: b.created_at,
       topics_count: b.topics?.length || 0,
       first_topic_title: b.topics?.[0]?.title || 'No topics',
-      first_topic_preview: b.topics?.[0]?.content?.substring(0, 100) + '...' || 'No content',
+      first_topic_preview: (b.topics?.[0]?.content?.substring(0, 100) || 'No content') + '...',
       has_sources: (b.search_sources?.length || 0) > 0,
       ai_generated: b.ai_generated
     })) || [];
