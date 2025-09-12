@@ -208,23 +208,57 @@ CRITICAL: Return ONLY the JSON object above, no explanation text, no markdown fo
       
       for (const topicPattern of topicPatterns) {
         const match = briefingText.match(topicPattern.pattern);
-        if (match) {
-          topics.push({
-            title: topicPattern.title,
-            content: match[1].replace(/\\n/g, ' ').replace(/\s+/g, ' ').trim() + " (Generated from real-time web search)",
-            sources: []
-          });
+        if (match && match[1] && match[1].length > 10) {
+          // Clean up the content more thoroughly
+          let cleanContent = match[1]
+            .replace(/\\n/g, ' ')
+            .replace(/\\r/g, ' ')
+            .replace(/\\t/g, ' ')
+            .replace(/\\\"/g, '"')
+            .replace(/\\\\/g, '\\')
+            .replace(/\s+/g, ' ')
+            .trim();
+          
+          // Ensure content is meaningful and complete
+          if (cleanContent.length > 20 && !cleanContent.endsWith('\\')) {
+            topics.push({
+              title: topicPattern.title,
+              content: cleanContent + " (Generated from real-time web search)",
+              sources: []
+            });
+          }
         }
       }
       
       // If no structured topics found, use generic approach
       if (topics.length === 0) {
+        console.log('🔧 Using generic parsing approach for', stan.name);
         const sections = briefingText.split(/\d+\.\s*/).filter((s: string) => s.trim().length > 10);
-        topics = sections.map((section: string, index: number) => ({
-          title: `Real-Time Update ${index + 1}`,
-          content: section.trim().substring(0, 200) + "... (Generated from live web search)",
-          sources: []
-        }));
+        
+        topics = sections.slice(0, 3).map((section: string, index: number) => {
+          // Clean up section content
+          let cleanSection = section
+            .replace(/\\n/g, ' ')
+            .replace(/\\r/g, ' ')
+            .replace(/\\t/g, ' ')
+            .replace(/\\\"/g, '"')
+            .replace(/\\\\/g, '\\')
+            .replace(/\s+/g, ' ')
+            .trim();
+          
+          // Take meaningful content, not just first 200 chars
+          if (cleanSection.length > 300) {
+            cleanSection = cleanSection.substring(0, 250) + "...";
+          }
+          
+          const topicTitles = ["Recent News & Activities", "Social Media & Fan Reactions", "Upcoming Events & Releases"];
+          
+          return {
+            title: topicTitles[index] || `Real-Time Update ${index + 1}`,
+            content: cleanSection + " (Generated from live web search)",
+            sources: []
+          };
+        });
       }
       
       console.log('📝 Extracted', topics.length, 'topics using smart fallback for', stan.name);
@@ -236,6 +270,19 @@ CRITICAL: Return ONLY the JSON object above, no explanation text, no markdown fo
       `https://www.google.com/search?q=${encodeURIComponent(stan.name + ' recent updates ' + new Date().getFullYear())}`
     ];
     
+    // Ensure each topic has sources if searchSources are available
+    if (searchSources.length > 0 && topics.length > 0) {
+      topics.forEach((topic, index) => {
+        if (topic.sources.length === 0) {
+          // Distribute sources among topics
+          const sourcesPerTopic = Math.ceil(searchSources.length / topics.length);
+          const startIndex = index * sourcesPerTopic;
+          const endIndex = Math.min(startIndex + sourcesPerTopic, searchSources.length);
+          topic.sources = searchSources.slice(startIndex, endIndex);
+        }
+      });
+    }
+
     return {
       topics: topics,
       searchSources: searchSources.length > 0 ? searchSources : fallbackSources,
