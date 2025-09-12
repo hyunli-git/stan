@@ -95,16 +95,12 @@ const SEARCH_DATABASE: StanSuggestion[] = [
 ];
 
 export default function AddStanScreen({ navigation }: AddStanScreenProps) {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredSuggestions, setFilteredSuggestions] = useState<StanSuggestion[]>([]);
   const [selectedStans, setSelectedStans] = useState<Set<string>>(new Set());
-  const [isMultiSelectMode, setIsMultiSelectMode] = useState(true);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -155,28 +151,13 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
   };
 
   const toggleStanSelection = (suggestion: StanSuggestion) => {
-    if (isMultiSelectMode) {
-      const newSelection = new Set(selectedStans);
-      if (newSelection.has(suggestion.id)) {
-        newSelection.delete(suggestion.id);
-      } else {
-        newSelection.add(suggestion.id);
-      }
-      setSelectedStans(newSelection);
+    const newSelection = new Set(selectedStans);
+    if (newSelection.has(suggestion.id)) {
+      newSelection.delete(suggestion.id);
     } else {
-      // Single select mode (original behavior)
-      setName(suggestion.name);
-      setDescription(suggestion.description);
-      setSearchQuery(suggestion.name);
-      
-      // Find and select the matching category
-      const matchingCategory = categories.find(cat => cat.id === suggestion.categoryId);
-      if (matchingCategory) {
-        setSelectedCategory(matchingCategory);
-      }
-      
-      setFilteredSuggestions([]);
+      newSelection.add(suggestion.id);
     }
+    setSelectedStans(newSelection);
   };
 
   const selectSuggestion = toggleStanSelection; // Keep for backward compatibility
@@ -194,9 +175,9 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
   };
 
   const handleAddStans = async () => {
-    console.log('🔄 handleAddStans called', { isMultiSelectMode, selectedCount: selectedStans.size });
+    console.log('🔄 handleAddStans called', { selectedCount: selectedStans.size });
     
-    if (isMultiSelectMode && selectedStans.size > 0) {
+    if (selectedStans.size > 0) {
       // Bulk add selected stans
       const selectedSuggestions = SEARCH_DATABASE.filter(s => selectedStans.has(s.id));
       console.log('📋 Selected suggestions:', selectedSuggestions.map(s => s.name));
@@ -281,70 +262,10 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
         setLoading(false);
       }
     } else {
-      // Single add mode (original behavior)
-      if (!name.trim()) {
-        Alert.alert('Error', 'Please enter a name for what you want to stan');
-        return;
-      }
-
-      if (!selectedCategory) {
-        Alert.alert('Error', 'Please select a category');
-        return;
-      }
-
-      setLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('stans')
-          .insert({
-            user_id: user?.id,
-            category_id: selectedCategory.id,
-            name: name.trim(),
-            description: description.trim() || null,
-            priority: 3,
-          })
-          .select();
-
-        if (error) throw error;
-
-        Alert.alert(
-          'Success!',
-          `You're now following ${name}! You'll get daily briefings about them.`,
-          [
-            {
-              text: 'Add Another',
-              onPress: () => {
-                setName('');
-                setDescription('');
-                setSelectedCategory(null);
-                setSearchQuery('');
-                setFilteredSuggestions([]);
-              }
-            },
-            {
-              text: 'Done',
-              style: 'default',
-              onPress: () => navigation.goBack()
-            }
-          ]
-        );
-      } catch (error: any) {
-        console.error('Error adding stan:', error);
-        
-        let errorMessage = error.message || 'Failed to add stan';
-        if (errorMessage.includes('duplicate')) {
-          errorMessage = `You're already following "${name}"!`;
-        }
-        
-        Alert.alert('Error', errorMessage);
-      } finally {
-        setLoading(false);
-      }
+      Alert.alert('Error', 'Please select at least one stan to follow');
     }
   };
 
-  // Keep old function name for compatibility
-  const handleAddStan = handleAddStans;
 
   const renderSuggestion = ({ item }: { item: StanSuggestion }) => {
     const isSelected = selectedStans.has(item.id);
@@ -354,7 +275,7 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
         style={[
           styles.suggestionCard, 
           { borderLeftColor: item.categoryColor },
-          isMultiSelectMode && isSelected && styles.suggestionCardSelected
+          isSelected && styles.suggestionCardSelected
         ]}
         onPress={() => selectSuggestion(item)}
         activeOpacity={0.7}
@@ -367,11 +288,9 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
               <Text style={styles.suggestionCategory}>{item.category}</Text>
             </View>
           </View>
-          {isMultiSelectMode && (
-            <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-              {isSelected && <Text style={styles.checkmark}>✓</Text>}
-            </View>
-          )}
+          <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+            {isSelected && <Text style={styles.checkmark}>✓</Text>}
+          </View>
         </View>
         <Text style={styles.suggestionDescription}>{item.description}</Text>
       </TouchableOpacity>
@@ -410,48 +329,43 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
 
         {/* Search Input */}
         <View style={styles.searchSection}>
-          <Text style={styles.label}>Search or Add Manually *</Text>
+          <Text style={styles.label}>Search for stans to follow</Text>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search for popular stans or type your own..."
+            placeholder="Search BTS, Taylor Swift, Lakers..."
             value={searchQuery}
-            onChangeText={(text) => {
-              setSearchQuery(text);
-              setName(text);
-            }}
+            onChangeText={setSearchQuery}
             autoCorrect={false}
             placeholderTextColor="#999"
           />
         </View>
 
         {/* Search Results */}
-        {filteredSuggestions.length > 0 ? (
+        {filteredSuggestions.length > 0 && (
           <View style={styles.suggestionsSection}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>
                 {searchQuery.trim().length > 0 ? 'Search Results' : 'Popular Suggestions'}
               </Text>
-              {isMultiSelectMode && (
-                <View style={styles.multiSelectControls}>
-                  <TouchableOpacity
-                    style={styles.controlButton}
-                    onPress={selectAllVisible}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.controlButtonText}>Select All</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.controlButton}
-                    onPress={clearSelections}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.controlButtonText}>Clear</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+              <View style={styles.multiSelectControls}>
+                <TouchableOpacity
+                  style={styles.controlButton}
+                  onPress={selectAllVisible}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.controlButtonText}>Select All</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.controlButton}
+                  onPress={clearSelections}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.controlButtonText}>Clear</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             
-            {isMultiSelectMode && selectedStans.size > 0 && (
+            {selectedStans.size > 0 && (
               <View style={styles.selectedCounter}>
                 <Text style={styles.selectedCounterText}>
                   {selectedStans.size} selected
@@ -470,102 +384,33 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
               initialNumToRender={8}
               maxToRenderPerBatch={5}
               windowSize={10}
-              ListFooterComponent={() => (
-                <TouchableOpacity
-                  style={styles.manualAddButton}
-                  onPress={() => {
-                    setFilteredSuggestions([]);
-                    setIsMultiSelectMode(false);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.manualAddText}>+ Add Manually</Text>
-                </TouchableOpacity>
-              )}
+              ListFooterComponent={() => <View style={{ height: 20 }} />}
             />
             
             {/* Fixed Bottom Add Button */}
-            {isMultiSelectMode && (
-              <View style={styles.fixedBottomButton}>
-                <TouchableOpacity
-                  style={[
-                    styles.bulkAddButton, 
-                    loading && styles.addButtonDisabled,
-                    selectedStans.size === 0 && styles.addButtonDisabled
-                  ]}
-                  onPress={handleAddStans}
-                  disabled={loading || selectedStans.size === 0}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.bulkAddButtonText}>
-                    {loading 
-                      ? 'Adding...' 
-                      : selectedStans.size === 0
-                      ? 'Select stans to follow'
-                      : `✨ Follow ${selectedStans.size} ${selectedStans.size === 1 ? 'Stan' : 'Stans'}`
-                    }
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        ) : (
-          /* Manual Form */
-          <View style={styles.formSection}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Description (Optional)</Text>
-              <TextInput
-                style={styles.textArea}
-                placeholder="Why do you stan them? What makes them special?"
-                value={description}
-                onChangeText={setDescription}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-                placeholderTextColor="#999"
-              />
+            <View style={styles.fixedBottomButton}>
+              <TouchableOpacity
+                style={[
+                  styles.bulkAddButton, 
+                  loading && styles.addButtonDisabled,
+                  selectedStans.size === 0 && styles.addButtonDisabled
+                ]}
+                onPress={handleAddStans}
+                disabled={loading || selectedStans.size === 0}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.bulkAddButtonText}>
+                  {loading 
+                    ? 'Adding...' 
+                    : selectedStans.size === 0
+                    ? 'Select stans to follow'
+                    : `✨ Start Following ${selectedStans.size} ${selectedStans.size === 1 ? 'Stan' : 'Stans'}`
+                  }
+                </Text>
+              </TouchableOpacity>
             </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Category *</Text>
-              <View style={styles.categoriesContainer}>
-                {categories.map((category) => (
-                  <TouchableOpacity
-                    key={category.id}
-                    style={[
-                      styles.categoryChip,
-                      { backgroundColor: category.color + '20' },
-                      selectedCategory?.id === category.id && {
-                        backgroundColor: category.color,
-                      }
-                    ]}
-                    onPress={() => setSelectedCategory(category)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.categoryIcon}>{category.icon}</Text>
-                    <Text style={[
-                      styles.categoryText,
-                      selectedCategory?.id === category.id && styles.categoryTextSelected
-                    ]}>
-                      {category.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.addButton, loading && styles.addButtonDisabled]}
-              onPress={handleAddStan}
-              disabled={loading}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.addButtonText}>
-                {loading ? 'Adding...' : '✨ Start Following'}
-              </Text>
-            </TouchableOpacity>
           </View>
-        )}
+        ) : null}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
