@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/generate-daily-briefings",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/generate-public-briefings",
+      "schedule": "0 5 * * *"
+    }
+  ]
+}

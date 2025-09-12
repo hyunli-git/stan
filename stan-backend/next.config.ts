@@ -13,6 +13,18 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async rewrites() {
+    return [
+      {
+        source: '/_expo/:path*',
+        destination: '/app/_expo/:path*',
+      },
+      {
+        source: '/assets/:path*',
+        destination: '/app/assets/:path*',
+      },
+    ];
+  },
 };
 
 export default nextConfig;

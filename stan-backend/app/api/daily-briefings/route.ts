@@ -75,28 +75,27 @@ export async function GET(request: NextRequest) {
     const today = new Date().toISOString().split('T')[0];
     console.log('📅 Looking for briefings on date:', today);
 
-    // Get user's stan IDs
+    // Get user's followed stan names (not IDs, because global stans are owned by system user)
     const { data: userStans, error: stansError } = await supabase
       .from('stans')
-      .select('id')
+      .select('name')
       .eq('user_id', userId)
       .eq('is_active', true);
 
     if (stansError) throw stansError;
 
-    const stanIds = userStans?.map(stan => stan.id) || [];
-    console.log('👤 User stans found:', userStans?.length || 0, 'Stan IDs:', stanIds);
+    const followedStanNames = userStans?.map(stan => stan.name) || [];
+    console.log('👤 User follows these stans:', followedStanNames);
 
-    if (stanIds.length === 0) {
-      // User has no stans - return empty array
-      console.log('⚠️ No stans found for user:', userId);
-      return NextResponse.json({ briefings: [], message: 'No stans found for user' });
+    if (followedStanNames.length === 0) {
+      // User has no followed stans - return empty array
+      console.log('⚠️ No followed stans found for user:', userId);
+      return NextResponse.json({ briefings: [], message: 'No followed stans found for user' });
     }
 
-    // Get today's briefings for user's stans
-    // Use service role to bypass RLS and manual filtering to ensure user security
-    const { data: rawBriefings, error } = await supabase
-      .from('daily_briefings')
+    // Get today's briefings for ANY stan (using the correct 'briefings' table)
+    const { data: allBriefings, error } = await supabase
+      .from('briefings')
       .select(`
         *,
         stans (
@@ -111,14 +110,12 @@ export async function GET(request: NextRequest) {
           )
         )
       `)
-      .eq('date', today)
-      .in('stan_id', stanIds)
       .order('created_at', { ascending: false });
     
-    // Additional security: Filter briefings to only include those for the user's stans
-    const briefings = rawBriefings?.filter(briefing => 
-      briefing.stans && briefing.stans.user_id === userId
-    );
+    // Filter to only show briefings for stans the user follows
+    const briefings = allBriefings?.filter(briefing => 
+      briefing.stans && followedStanNames.includes(briefing.stans.name)
+    ) || [];
 
     if (error) {
       console.error('❌ Database query error:', error);

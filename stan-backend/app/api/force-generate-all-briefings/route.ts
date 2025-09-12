@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize with service role to bypass RLS for server-side operations
@@ -6,11 +6,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
-
-// Verify service role key is configured
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('❌ SUPABASE_SERVICE_ROLE_KEY is not configured');
-}
 
 // Generate realistic briefing content without external API
 const generateMockBriefing = (stanName: string, category: string) => {
@@ -21,16 +16,16 @@ const generateMockBriefing = (stanName: string, category: string) => {
   });
 
   // Category-specific content templates
-  interface TopicTemplate {
+  interface Topic {
     title: string;
     content: string;
     sources: string[];
   }
-
+  
   interface ContentTemplate {
-    topics: TopicTemplate[];
+    topics: Topic[];
   }
-
+  
   const contentTemplates: Record<string, ContentTemplate> = {
     'K-Pop': {
       topics: [
@@ -62,30 +57,6 @@ const generateMockBriefing = (stanName: string, category: string) => {
           title: "🏆 Chart Performance",
           content: `${stanName}'s latest release climbed 15 spots on the Billboard Hot 100 this week! Streaming numbers show a 40% increase, with fans organizing streaming parties worldwide. Radio play has doubled in major markets! 📈💪`,
           sources: [`https://billboard.com/artist/${stanName}`, `https://chartdata.com/${stanName}`]
-        },
-        {
-          title: "🎤 Tour Updates",
-          content: `Festival season lineup confirmed! ${stanName} will headline at least 3 major festivals this summer, with rumors of additional surprise appearances. VIP packages are selling fast with exclusive meet & greet opportunities! 🎪🎉`,
-          sources: [`https://ticketmaster.com/${stanName}`, `https://livenation.com/${stanName}`]
-        }
-      ]
-    },
-    'Sports': {
-      topics: [
-        {
-          title: "⚽ Game Highlights",
-          content: `${stanName} delivered an outstanding performance in today's match! Key plays in the final quarter secured the victory, with stats showing their best performance of the season. The crowd went wild! 🏆⚡`,
-          sources: [`https://espn.com/team/${stanName}`, `https://nba.com/${stanName}`]
-        },
-        {
-          title: "📊 Team Updates",
-          content: `Breaking: ${stanName} announced new roster changes that have fans excited! The coaching staff confirmed all players are healthy and ready for the upcoming crucial games. Team chemistry is at an all-time high! 💪🔥`,
-          sources: [`https://sports.yahoo.com/${stanName}`, `https://theathetic.com/${stanName}`]
-        },
-        {
-          title: "🎯 Season Outlook",
-          content: `Analysts predict ${stanName} has a strong chance at the championship this year! With recent wins and improved defense stats, the team is positioned perfectly for the playoffs. Ticket sales are through the roof! 📈🏅`,
-          sources: [`https://sportsillustrated.com/${stanName}`, `https://bleacherreport.com/${stanName}`]
         }
       ]
     },
@@ -100,11 +71,6 @@ const generateMockBriefing = (stanName: string, category: string) => {
           title: "🏆 Esports Scene",
           content: `The ${stanName} championship tournament announced a record-breaking prize pool! Top teams from around the world are preparing, with qualifiers starting next week. Viewership is expected to hit new heights! 💰🌍`,
           sources: [`https://esports.com/${stanName}`, `https://liquipedia.net/${stanName}`]
-        },
-        {
-          title: "🎯 Community Events",
-          content: `Special in-game event launching tomorrow! ${stanName} developers revealed exclusive rewards and limited-time challenges. The community is organizing teams and sharing strategies for maximum rewards! 🎁✨`,
-          sources: [`https://discord.gg/${stanName}`, `https://steamcommunity.com/${stanName}`]
         }
       ]
     },
@@ -119,11 +85,20 @@ const generateMockBriefing = (stanName: string, category: string) => {
           title: "📺 Streaming Updates",
           content: `${stanName} broke streaming records this week with 50 million hours watched! Critics are calling it the must-watch series of the year. Season renewal already confirmed due to overwhelming success! 📈🌟`,
           sources: [`https://netflix.com/${stanName}`, `https://deadline.com/${stanName}`]
+        }
+      ]
+    },
+    'Sports': {
+      topics: [
+        {
+          title: "⚽ Game Highlights",
+          content: `${stanName} delivered an outstanding performance in today's match! Key plays in the final quarter secured the victory, with stats showing their best performance of the season. The crowd went wild! 🏆⚡`,
+          sources: [`https://espn.com/team/${stanName}`, `https://nba.com/${stanName}`]
         },
         {
-          title: "🌟 Cast & Crew",
-          content: `Exclusive: ${stanName} cast reunion announced for a special fan event! Plus, the director teased a major announcement coming soon that will 'change everything' for the franchise! 🎉🚀`,
-          sources: [`https://imdb.com/title/${stanName}`, `https://rottentomatoes.com/${stanName}`]
+          title: "📊 Team Updates",
+          content: `Breaking: ${stanName} announced new roster changes that have fans excited! The coaching staff confirmed all players are healthy and ready for the upcoming crucial games. Team chemistry is at an all-time high! 💪🔥`,
+          sources: [`https://sports.yahoo.com/${stanName}`, `https://theathetic.com/${stanName}`]
         }
       ]
     }
@@ -136,31 +111,20 @@ const generateMockBriefing = (stanName: string, category: string) => {
 
   const content = contentTemplates[categoryKey];
   
-  // Personalize content with stan name
   return {
-    topics: content.topics.map((topic) => ({
-      ...topic,
-      content: topic.content.replace(/\${stanName}/g, stanName)
-    })),
-    searchSources: content.topics.flatMap((t) => t.sources),
+    topics: content.topics,
+    searchSources: content.topics.flatMap(t => t.sources),
     images: [],
     generatedAt: new Date().toISOString()
   };
 };
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
-    const { userId } = await request.json();
-    
-    if (!userId) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
-    }
-
-    // Use consistent UTC date formatting to match daily-briefings API
     const today = new Date().toISOString().split('T')[0];
-    console.log('📅 Generating briefings for date:', today);
+    console.log('📅 Generating briefings for all stans on date:', today);
 
-    // Get user's active stans
+    // Get ALL active stans
     const { data: stans, error: stansError } = await supabase
       .from('stans')
       .select(`
@@ -174,21 +138,19 @@ export async function POST(request: NextRequest) {
           color
         )
       `)
-      .eq('user_id', userId)
       .eq('is_active', true);
 
     if (stansError) throw stansError;
 
     if (!stans || stans.length === 0) {
-      console.log(`⚠️ No active stans found for user: ${userId}`);
+      console.log(`⚠️ No active stans found`);
       return NextResponse.json({ 
-        message: 'No active stans found for user',
+        message: 'No active stans found',
         count: 0
       });
     }
 
-    console.log(`🚀 Force generating briefings for ${stans.length} stans for user ${userId}`);
-    console.log('👤 User stans:', stans.map(s => ({ id: s.id, name: s.name })));
+    console.log(`🚀 Force generating briefings for ${stans.length} stans`);
 
     const briefingsGenerated = [];
 
@@ -221,16 +183,10 @@ export async function POST(request: NextRequest) {
           .select();
 
         if (insertError) {
-          console.error(`❌ Failed to save briefing for ${stan.name}:`, insertError.message, insertError.details);
+          console.error(`❌ Failed to save briefing for ${stan.name}:`, insertError.message);
         } else if (insertData && insertData.length > 0) {
-          console.log(`✅ Generated and saved briefing for: ${stan.name}`, { 
-            id: insertData[0].id, 
-            date: insertData[0].date,
-            topics_count: insertData[0].topics?.length || 0 
-          });
+          console.log(`✅ Generated and saved briefing for: ${stan.name}`);
           briefingsGenerated.push(stan.name);
-        } else {
-          console.error(`⚠️ No data returned after insert for ${stan.name} - possible RLS issue`);
         }
         
       } catch (error) {
@@ -240,8 +196,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ 
       success: true,
-      message: `Generated ${briefingsGenerated.length} briefings`,
+      message: `Generated ${briefingsGenerated.length} briefings for all stans`,
       stans: briefingsGenerated,
+      totalStans: stans.length,
       date: today
     });
 
