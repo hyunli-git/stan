@@ -1,18 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Initialize with service role to bypass RLS for server-side operations
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
-
-// Initialize Gemini 2.0 Flash with Grounding for real-time web search
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
-const model = genAI.getGenerativeModel({ 
-  model: "gemini-2.0-flash-exp"
-});
 
 const generationConfig = {
   temperature: 0.7,
@@ -64,17 +57,17 @@ const generateRealTimeBriefing = async (stan: Stan): Promise<BriefingContent> =>
   "topics": [
     {
       "title": "Recent News & Activities",
-      "content": "2-3 sentences about recent news with specific dates and details. Use emojis appropriately.",
+      "content": "Brief summary with current details about recent news and activities",
       "sources": ["url1", "url2"]
     },
     {
       "title": "Social Media & Fan Reactions", 
-      "content": "2-3 sentences about social media activity and fan reactions. Use emojis appropriately.",
+      "content": "Brief summary with current social media activity and fan reactions",
       "sources": ["url1", "url2"]
     },
     {
       "title": "Upcoming Events & Releases",
-      "content": "2-3 sentences about upcoming schedules and planned activities. Use emojis appropriately.", 
+      "content": "Brief summary of upcoming schedule and planned activities", 
       "sources": ["url1", "url2"]
     }
   ],
@@ -84,12 +77,14 @@ const generateRealTimeBriefing = async (stan: Stan): Promise<BriefingContent> =>
 Context: ${stan.name} - ${category.name} - ${stan.description || 'None'}
 Today: ${today}
 
-CRITICAL: Return ONLY the JSON object above, no explanation text, no markdown formatting, just the JSON.`;
+CRITICAL REQUIREMENTS:
+- Return ONLY the JSON object, no explanation text, no markdown formatting
+- Do NOT use quotes within the content text (use apostrophes instead)
+- Keep URLs complete and valid
+- Each topic content should be 2-3 sentences maximum`;
 
     console.log('🌐 Using Gemini 2.0 Flash with Google Search Grounding for:', stan.name);
     
-    // Use Gemini 2.0 Flash with Google Search Grounding
-    // Try direct REST API call since JavaScript SDK might have different syntax
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`, {
       method: 'POST',
       headers: {
@@ -111,10 +106,9 @@ CRITICAL: Return ONLY the JSON object above, no explanation text, no markdown fo
     const data = await response.json();
     const briefingText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     
-    // Check for grounding metadata
     const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
     if (groundingMetadata) {
-      console.log('🎉 Google Search Grounding worked! Found metadata:', {
+      console.log('🎉 Google Search Grounding worked for', stan.name, '! Found:', {
         searchQueries: groundingMetadata.webSearchQueries?.length || 0,
         sources: groundingMetadata.groundingChunks?.length || 0
       });
@@ -174,10 +168,11 @@ CRITICAL: Return ONLY the JSON object above, no explanation text, no markdown fo
         
         console.log('🧹 Cleaned JSON for', stan.name, ':', cleanJson.substring(0, 300) + '...');
         
-        const parsed = JSON.parse(cleanJson) as { topics?: BriefingTopic[], searchSources?: string[] };
-        if (parsed && typeof parsed === 'object') {
-          parsedBriefing = parsed;
-          console.log('✅ Successfully parsed JSON for', stan.name, 'with', parsed.topics?.length || 0, 'topics');
+        // Safe parsing with proper type checking
+        const parsedResult = JSON.parse(cleanJson);
+        if (parsedResult && typeof parsedResult === 'object' && parsedResult.topics) {
+          parsedBriefing = parsedResult as { topics: BriefingTopic[], searchSources?: string[] };
+          console.log('✅ Successfully parsed JSON for', stan.name, 'with', parsedBriefing.topics.length, 'topics');
         }
       }
     } catch (parseError) {
@@ -298,7 +293,7 @@ export async function POST() {
       });
     }
 
-    console.log(`🚀 Generating real-time briefings for ${stans.length} stans using Google Search`);
+    console.log(`🚀 Generating real-time briefings for ${stans.length} stans using Google Search Grounding`);
 
     const briefingsGenerated = [];
     const errors = [];
