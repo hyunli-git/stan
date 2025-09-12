@@ -174,9 +174,10 @@ CRITICAL: Return ONLY the JSON object above, no explanation text, no markdown fo
         
         console.log('🧹 Cleaned JSON for', stan.name, ':', cleanJson.substring(0, 300) + '...');
         
-        parsedBriefing = JSON.parse(cleanJson);
-        if (parsedBriefing) {
-          console.log('✅ Successfully parsed JSON for', stan.name, 'with', parsedBriefing.topics?.length || 0, 'topics');
+        const parsed = JSON.parse(cleanJson) as { topics?: BriefingTopic[], searchSources?: string[] };
+        if (parsed && typeof parsed === 'object') {
+          parsedBriefing = parsed;
+          console.log('✅ Successfully parsed JSON for', stan.name, 'with', parsed.topics?.length || 0, 'topics');
         }
       }
     } catch (parseError) {
