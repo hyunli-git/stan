@@ -1,12 +1,25 @@
 {
-  "crons": [
+  "functions": {
+    "app/api/**/*.ts": {
+      "runtime": "nodejs20.x"
+    }
+  },
+  "rewrites": [
     {
-      "path": "/api/generate-daily-briefings",
-      "schedule": "0 6 * * *"
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
     },
     {
-      "path": "/api/generate-public-briefings",
-      "schedule": "0 5 * * *"
+      "source": "/_expo/:path*",
+      "destination": "/_expo/:path*"
+    },
+    {
+      "source": "/assets/:path*",
+      "destination": "/assets/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }

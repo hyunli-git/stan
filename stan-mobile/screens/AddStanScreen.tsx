@@ -103,6 +103,8 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredSuggestions, setFilteredSuggestions] = useState<StanSuggestion[]>([]);
+  const [selectedStans, setSelectedStans] = useState<Set<string>>(new Set());
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(true);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -152,99 +154,229 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
     }
   };
 
-  const selectSuggestion = (suggestion: StanSuggestion) => {
-    setName(suggestion.name);
-    setDescription(suggestion.description);
-    setSearchQuery(suggestion.name);
-    
-    // Find and select the matching category
-    const matchingCategory = categories.find(cat => cat.id === suggestion.categoryId);
-    if (matchingCategory) {
-      setSelectedCategory(matchingCategory);
-    }
-    
-    setFilteredSuggestions([]);
-  };
-
-  const handleAddStan = async () => {
-    if (!name.trim()) {
-      Alert.alert('Error', 'Please enter a name for what you want to stan');
-      return;
-    }
-
-    if (!selectedCategory) {
-      Alert.alert('Error', 'Please select a category');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('stans')
-        .insert({
-          user_id: user?.id,
-          category_id: selectedCategory.id,
-          name: name.trim(),
-          description: description.trim() || null,
-          priority: 3, // Default priority
-        })
-        .select();
-
-      if (error) throw error;
-
-      Alert.alert(
-        'Success!',
-        `You're now following ${name}! You'll get daily briefings about them.`,
-        [
-          {
-            text: 'Add Another',
-            onPress: () => {
-              setName('');
-              setDescription('');
-              setSelectedCategory(null);
-              setSearchQuery('');
-              setFilteredSuggestions([]);
-            }
-          },
-          {
-            text: 'Done',
-            style: 'default',
-            onPress: () => navigation.goBack()
-          }
-        ]
-      );
-    } catch (error: any) {
-      console.error('Error adding stan:', error);
+  const toggleStanSelection = (suggestion: StanSuggestion) => {
+    if (isMultiSelectMode) {
+      const newSelection = new Set(selectedStans);
+      if (newSelection.has(suggestion.id)) {
+        newSelection.delete(suggestion.id);
+      } else {
+        newSelection.add(suggestion.id);
+      }
+      setSelectedStans(newSelection);
+    } else {
+      // Single select mode (original behavior)
+      setName(suggestion.name);
+      setDescription(suggestion.description);
+      setSearchQuery(suggestion.name);
       
-      let errorMessage = error.message || 'Failed to add stan';
-      if (errorMessage.includes('duplicate')) {
-        errorMessage = `You're already following "${name}"!`;
+      // Find and select the matching category
+      const matchingCategory = categories.find(cat => cat.id === suggestion.categoryId);
+      if (matchingCategory) {
+        setSelectedCategory(matchingCategory);
       }
       
-      Alert.alert('Error', errorMessage);
-    } finally {
-      setLoading(false);
+      setFilteredSuggestions([]);
     }
   };
 
-  const renderSuggestion = ({ item }: { item: StanSuggestion }) => (
-    <TouchableOpacity
-      style={[styles.suggestionCard, { borderLeftColor: item.categoryColor }]}
-      onPress={() => selectSuggestion(item)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.suggestionHeader}>
-        <View style={styles.suggestionInfo}>
-          <Text style={styles.suggestionIcon}>{item.categoryIcon}</Text>
-          <View style={styles.suggestionText}>
-            <Text style={styles.suggestionName}>{item.name}</Text>
-            <Text style={styles.suggestionCategory}>{item.category}</Text>
+  const selectSuggestion = toggleStanSelection; // Keep for backward compatibility
+
+  const clearSelections = () => {
+    setSelectedStans(new Set());
+  };
+
+  const selectAllVisible = () => {
+    const newSelection = new Set(selectedStans);
+    filteredSuggestions.forEach(suggestion => {
+      newSelection.add(suggestion.id);
+    });
+    setSelectedStans(newSelection);
+  };
+
+  const handleAddStans = async () => {
+    console.log('🔄 handleAddStans called', { isMultiSelectMode, selectedCount: selectedStans.size });
+    
+    if (isMultiSelectMode && selectedStans.size > 0) {
+      // Bulk add selected stans
+      const selectedSuggestions = SEARCH_DATABASE.filter(s => selectedStans.has(s.id));
+      console.log('📋 Selected suggestions:', selectedSuggestions.map(s => s.name));
+      
+      if (selectedSuggestions.length === 0) {
+        Alert.alert('Error', 'Please select at least one stan to follow');
+        return;
+      }
+
+      setLoading(true);
+      try {
+        // Find or create categories for the selected stans
+        const stansToAdd = await Promise.all(selectedSuggestions.map(async (suggestion) => {
+          // Try to find existing category by name
+          let categoryId = suggestion.categoryId;
+          
+          if (!categoryId) {
+            // Find category by name
+            const existingCategory = categories.find(cat => 
+              cat.name.toLowerCase() === suggestion.category.toLowerCase()
+            );
+            
+            if (existingCategory) {
+              categoryId = existingCategory.id;
+            } else {
+              // Create new category if it doesn't exist
+              const { data: newCategory, error: categoryError } = await supabase
+                .from('categories')
+                .insert({
+                  name: suggestion.category,
+                  icon: suggestion.categoryIcon || '📌',
+                  color: suggestion.categoryColor || '#6B46C1'
+                })
+                .select()
+                .single();
+              
+              if (categoryError) throw categoryError;
+              categoryId = newCategory.id;
+            }
+          }
+          
+          return {
+            user_id: user?.id,
+            category_id: categoryId,
+            name: suggestion.name,
+            description: suggestion.description,
+            priority: 3,
+          };
+        }));
+
+        const { data, error } = await supabase
+          .from('stans')
+          .insert(stansToAdd)
+          .select();
+
+        if (error) throw error;
+
+        const addedCount = data?.length || selectedSuggestions.length;
+        
+        // Clear selections
+        setSelectedStans(new Set());
+        setSearchQuery('');
+        
+        // Navigate back immediately
+        navigation.goBack();
+        
+        // Show quick success message (optional - remove if you don't want any message)
+        Alert.alert(
+          'Success! 🎉',
+          `You're now following ${addedCount} new ${addedCount === 1 ? 'stan' : 'stans'}!`
+        );
+      } catch (error: any) {
+        console.error('Error adding stans:', error);
+        
+        let errorMessage = error.message || 'Failed to add stans';
+        if (errorMessage.includes('duplicate')) {
+          errorMessage = 'Some of these stans are already in your list!';
+        }
+        
+        Alert.alert('Error', errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // Single add mode (original behavior)
+      if (!name.trim()) {
+        Alert.alert('Error', 'Please enter a name for what you want to stan');
+        return;
+      }
+
+      if (!selectedCategory) {
+        Alert.alert('Error', 'Please select a category');
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('stans')
+          .insert({
+            user_id: user?.id,
+            category_id: selectedCategory.id,
+            name: name.trim(),
+            description: description.trim() || null,
+            priority: 3,
+          })
+          .select();
+
+        if (error) throw error;
+
+        Alert.alert(
+          'Success!',
+          `You're now following ${name}! You'll get daily briefings about them.`,
+          [
+            {
+              text: 'Add Another',
+              onPress: () => {
+                setName('');
+                setDescription('');
+                setSelectedCategory(null);
+                setSearchQuery('');
+                setFilteredSuggestions([]);
+              }
+            },
+            {
+              text: 'Done',
+              style: 'default',
+              onPress: () => navigation.goBack()
+            }
+          ]
+        );
+      } catch (error: any) {
+        console.error('Error adding stan:', error);
+        
+        let errorMessage = error.message || 'Failed to add stan';
+        if (errorMessage.includes('duplicate')) {
+          errorMessage = `You're already following "${name}"!`;
+        }
+        
+        Alert.alert('Error', errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  // Keep old function name for compatibility
+  const handleAddStan = handleAddStans;
+
+  const renderSuggestion = ({ item }: { item: StanSuggestion }) => {
+    const isSelected = selectedStans.has(item.id);
+    
+    return (
+      <TouchableOpacity
+        style={[
+          styles.suggestionCard, 
+          { borderLeftColor: item.categoryColor },
+          isMultiSelectMode && isSelected && styles.suggestionCardSelected
+        ]}
+        onPress={() => selectSuggestion(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.suggestionHeader}>
+          <View style={styles.suggestionInfo}>
+            <Text style={styles.suggestionIcon}>{item.categoryIcon}</Text>
+            <View style={styles.suggestionText}>
+              <Text style={styles.suggestionName}>{item.name}</Text>
+              <Text style={styles.suggestionCategory}>{item.category}</Text>
+            </View>
           </View>
+          {isMultiSelectMode && (
+            <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+              {isSelected && <Text style={styles.checkmark}>✓</Text>}
+            </View>
+          )}
         </View>
-      </View>
-      <Text style={styles.suggestionDescription}>{item.description}</Text>
-    </TouchableOpacity>
-  );
+        <Text style={styles.suggestionDescription}>{item.description}</Text>
+      </TouchableOpacity>
+    );
+  };
 
   if (loadingCategories) {
     return (
@@ -295,9 +427,38 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
         {/* Search Results */}
         {filteredSuggestions.length > 0 ? (
           <View style={styles.suggestionsSection}>
-            <Text style={styles.sectionTitle}>
-              {searchQuery.trim().length > 0 ? 'Search Results' : 'Popular Suggestions'}
-            </Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>
+                {searchQuery.trim().length > 0 ? 'Search Results' : 'Popular Suggestions'}
+              </Text>
+              {isMultiSelectMode && (
+                <View style={styles.multiSelectControls}>
+                  <TouchableOpacity
+                    style={styles.controlButton}
+                    onPress={selectAllVisible}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.controlButtonText}>Select All</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.controlButton}
+                    onPress={clearSelections}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.controlButtonText}>Clear</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+            
+            {isMultiSelectMode && selectedStans.size > 0 && (
+              <View style={styles.selectedCounter}>
+                <Text style={styles.selectedCounterText}>
+                  {selectedStans.size} selected
+                </Text>
+              </View>
+            )}
+
             <FlatList
               data={filteredSuggestions}
               renderItem={renderSuggestion}
@@ -312,13 +473,41 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
               ListFooterComponent={() => (
                 <TouchableOpacity
                   style={styles.manualAddButton}
-                  onPress={() => setFilteredSuggestions([])}
+                  onPress={() => {
+                    setFilteredSuggestions([]);
+                    setIsMultiSelectMode(false);
+                  }}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.manualAddText}>+ Add Manually</Text>
                 </TouchableOpacity>
               )}
             />
+            
+            {/* Fixed Bottom Add Button */}
+            {isMultiSelectMode && (
+              <View style={styles.fixedBottomButton}>
+                <TouchableOpacity
+                  style={[
+                    styles.bulkAddButton, 
+                    loading && styles.addButtonDisabled,
+                    selectedStans.size === 0 && styles.addButtonDisabled
+                  ]}
+                  onPress={handleAddStans}
+                  disabled={loading || selectedStans.size === 0}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.bulkAddButtonText}>
+                    {loading 
+                      ? 'Adding...' 
+                      : selectedStans.size === 0
+                      ? 'Select stans to follow'
+                      : `✨ Follow ${selectedStans.size} ${selectedStans.size === 1 ? 'Stan' : 'Stans'}`
+                    }
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         ) : (
           /* Manual Form */
@@ -578,5 +767,83 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 16,
     fontWeight: '500',
+  },
+  // Multi-select styles
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  multiSelectControls: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  controlButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#f0f0f0',
+  },
+  controlButtonText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  selectedCounter: {
+    backgroundColor: '#e8f4fd',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+  },
+  selectedCounterText: {
+    fontSize: 12,
+    color: '#1976d2',
+    fontWeight: '600',
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#ddd',
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  checkboxSelected: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  checkmark: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  suggestionCardSelected: {
+    backgroundColor: '#f0f8ff',
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+  },
+  fixedBottomButton: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  bulkAddButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  bulkAddButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
