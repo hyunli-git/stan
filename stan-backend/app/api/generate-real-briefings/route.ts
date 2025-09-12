@@ -120,14 +120,21 @@ CRITICAL: Return ONLY the JSON object above, no explanation text, no markdown fo
         chunks: groundingMetadata.groundingChunks?.length || 0
       });
       
-      // Extract actual URLs from grounding chunks
+      // Extract source domains from grounding chunks
       if (groundingMetadata.groundingChunks) {
         realSources = groundingMetadata.groundingChunks
-          .map((chunk: any) => chunk.web?.uri)
-          .filter((uri: string) => uri && uri.startsWith('http'))
-          .slice(0, 10); // Limit to first 10 sources
+          .map((chunk: any) => chunk.web?.title || chunk.web?.uri)
+          .filter((source: string) => source && source.length > 0)
+          .map((source: string) => {
+            // Convert to proper URL format if it's just a domain
+            if (source && !source.startsWith('http') && source.includes('.')) {
+              return `https://${source}`;
+            }
+            return source;
+          })
+          .slice(0, 8); // Limit to first 8 sources
         
-        console.log('🔗 Found real sources for', stan.name, ':', realSources);
+        console.log('🔗 Found', realSources.length, 'real sources for', stan.name, ':', realSources);
       }
       
       // Log search queries that were used
