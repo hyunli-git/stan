@@ -103,6 +103,12 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
   const [selectedStans, setSelectedStans] = useState<string[]>([]);
   const { user } = useAuth();
 
+  // Debug navigation
+  useEffect(() => {
+    console.log('🧭 Navigation object:', navigation);
+    console.log('🧭 Navigation methods:', Object.keys(navigation));
+  }, [navigation]);
+
   useEffect(() => {
     loadCategories();
     // Show popular suggestions by default
@@ -196,7 +202,21 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
   }, [filteredSuggestions]);
 
   const handleAddStans = async () => {
-    console.log('🔄 handleAddStans called', { selectedCount: selectedStans.size });
+    console.log('🔄 handleAddStans called', { selectedCount: selectedStans.length, selectedIds: selectedStans });
+    console.log('🔄 User context:', user);
+    console.log('🔄 Categories loaded:', categories.length);
+    
+    if (!user) {
+      console.log('❌ No user found - redirecting to login');
+      Alert.alert('Authentication Required', 'Please log in to follow stans');
+      return;
+    }
+    
+    if (selectedStans.length === 0) {
+      console.log('❌ No stans selected');
+      Alert.alert('Error', 'Please select at least one stan to follow');
+      return;
+    }
     
     if (selectedStans.length > 0) {
       // Bulk add selected stans
@@ -249,29 +269,47 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
           };
         }));
 
+        console.log('💾 Attempting to insert stans:', stansToAdd);
         const { data, error } = await supabase
           .from('stans')
           .insert(stansToAdd)
           .select();
 
-        if (error) throw error;
+        console.log('💾 Database insert result:', { data, error });
+
+        if (error) {
+          console.error('❌ Database error:', error);
+          throw error;
+        }
 
         const addedCount = data?.length || selectedSuggestions.length;
+        console.log('✅ Successfully added stans:', addedCount);
         
         // Clear selections
+        console.log('🧹 Clearing selections and search');
         setSelectedStans([]);
         setSearchQuery('');
         
-        // Navigate back immediately
-        navigation.goBack();
+        // Navigate to Home tab instead of goBack since AddStan is a tab
+        console.log('🔄 Attempting navigation to Home tab');
+        try {
+          navigation.navigate('Home');
+          console.log('✅ Navigation to Home successful');
+        } catch (navError) {
+          console.log('❌ Navigation failed, trying goBack:', navError);
+          navigation.goBack();
+        }
         
         // Show quick success message (optional - remove if you don't want any message)
-        Alert.alert(
-          'Success! 🎉',
-          `You're now following ${addedCount} new ${addedCount === 1 ? 'stan' : 'stans'}!`
-        );
+        setTimeout(() => {
+          Alert.alert(
+            'Success! 🎉',
+            `You're now following ${addedCount} new ${addedCount === 1 ? 'stan' : 'stans'}!`
+          );
+        }, 100);
       } catch (error: any) {
-        console.error('Error adding stans:', error);
+        console.error('❌ Error in handleAddStans:', error);
+        console.error('❌ Error stack:', error.stack);
         
         let errorMessage = error.message || 'Failed to add stans';
         if (errorMessage.includes('duplicate')) {
@@ -279,10 +317,13 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
         }
         
         Alert.alert('Error', errorMessage);
+        console.log('🚫 Error alert shown, not navigating');
       } finally {
+        console.log('🏁 Finally block - setting loading to false');
         setLoading(false);
       }
     } else {
+      console.log('❌ No stans selected - showing error alert');
       Alert.alert('Error', 'Please select at least one stan to follow');
     }
   };
@@ -445,7 +486,10 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
                   loading && styles.addButtonDisabled,
                   selectedStans.length === 0 && styles.addButtonDisabled
                 ]}
-                onPress={handleAddStans}
+                onPress={() => {
+                  console.log('🚀 BUTTON PRESSED! Starting handleAddStans...');
+                  handleAddStans();
+                }}
                 disabled={loading || selectedStans.length === 0}
                 activeOpacity={0.8}
               >
