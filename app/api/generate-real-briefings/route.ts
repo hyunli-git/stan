@@ -175,7 +175,9 @@ CRITICAL: Return ONLY the JSON object above, no explanation text, no markdown fo
         console.log('🧹 Cleaned JSON for', stan.name, ':', cleanJson.substring(0, 300) + '...');
         
         parsedBriefing = JSON.parse(cleanJson);
-        console.log('✅ Successfully parsed JSON for', stan.name, 'with', parsedBriefing?.topics?.length || 0, 'topics');
+        if (parsedBriefing) {
+          console.log('✅ Successfully parsed JSON for', stan.name, 'with', parsedBriefing.topics?.length || 0, 'topics');
+        }
       }
     } catch (parseError) {
       console.log('❌ Failed to parse JSON for', stan.name, ':', parseError);
