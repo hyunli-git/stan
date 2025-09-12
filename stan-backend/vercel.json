@@ -16,5 +16,11 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/generate-real-briefings",
+      "schedule": "0 6 * * *"
+    }
   ]
 }
