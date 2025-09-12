@@ -5,12 +5,13 @@
 ### 1. Multiple Vercel Projects ✅ FIXED
 **Issue**: Two different Vercel projects were configured:
 - `stan` (prj_Csd3G5VAKyjKqCFs5amhxBNyPXkE) - Used by stan-backend
-- `stan-project` (prj_moWjWdjDAWOUdltCKSARZ1U7exqI) - Used by root directory
+- `stan-project` (prj_moWjWdjDAWOUdltCKSARZ1U7exqI) - Was incorrectly created
 
 **Fix**: 
-- Removed root `.vercel` directory
-- Consolidated everything to use the `stan` project
-- All deployments now go through `stan-backend` directory
+- Linked root directory to `stan` project
+- Deleted `stan-project` from Vercel completely
+- All directories now use the same `stan` project ID
+- All deployments consolidated to single project
 
 ### 2. Incorrect API URL in Mobile App ✅ FIXED
 **Issue**: Mobile app was pointing to old deployment URL
@@ -46,14 +47,17 @@
 
 ```
 stan-project/
+├── .vercel/               # Root also linked to "stan" project
 ├── stan-backend/          # ← Main deployment directory
 │   ├── .vercel/           # Vercel project: "stan"
 │   ├── vercel.json        # All deployment config here
 │   ├── app/               # Next.js API routes
 │   └── public/            # Expo web build served from here
 └── stan-mobile/           # React Native app
+    ├── .vercel/           # Also linked to "stan" project
     └── config/api.ts      # Updated API URL
 
+All directories use the same Vercel project ID: prj_Csd3G5VAKyjKqCFs5amhxBNyPXkE
 ```
 
 ## Single Vercel Project Configuration
