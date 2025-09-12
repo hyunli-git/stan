@@ -39,7 +39,7 @@ export async function GET() {
 
     const briefingSummary = briefings?.map(b => ({
       id: b.id,
-      stan_name: (b.stans as any)?.name || 'Unknown Stan',
+      stan_name: b.stans && typeof b.stans === 'object' && 'name' in b.stans ? (b.stans as { name: string }).name : 'Unknown Stan',
       date: b.date,
       created_at: b.created_at,
       topics_count: b.topics?.length || 0,
