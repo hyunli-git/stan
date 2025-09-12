@@ -4,12 +4,8 @@
   "outputDirectory": "stan-backend/.next",
   "crons": [
     {
-      "path": "/api/generate-daily-briefings",
+      "path": "/api/generate-real-briefings",
       "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/generate-real-briefings", 
-      "schedule": "0 */6 * * *"
     }
   ]
 }
