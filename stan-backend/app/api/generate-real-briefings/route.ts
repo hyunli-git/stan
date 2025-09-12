@@ -176,7 +176,7 @@ CRITICAL: Return ONLY the JSON object above, no explanation text, no markdown fo
         
         // Safe parsing with proper type checking
         const parsedResult = JSON.parse(cleanJson);
-        if (parsedResult && typeof parsedResult === 'object' && parsedResult.topics) {
+        if (parsedResult && typeof parsedResult === 'object' && Array.isArray(parsedResult.topics)) {
           parsedBriefing = parsedResult as { topics: BriefingTopic[], searchSources?: string[] };
           console.log('✅ Successfully parsed JSON for', stan.name, 'with', parsedBriefing.topics.length, 'topics');
         }
