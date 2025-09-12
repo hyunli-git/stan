@@ -111,15 +111,31 @@ CRITICAL: Return ONLY the JSON object above, no explanation text, no markdown fo
     const data = await response.json();
     const briefingText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     
-    // Check for grounding metadata
+    // Extract real sources from grounding metadata
+    let realSources: string[] = [];
     const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
     if (groundingMetadata) {
-      console.log('🎉 Google Search Grounding worked! Found metadata:', {
+      console.log('🎉 Google Search Grounding worked for', stan.name, '! Found:', {
         searchQueries: groundingMetadata.webSearchQueries?.length || 0,
-        sources: groundingMetadata.groundingChunks?.length || 0
+        chunks: groundingMetadata.groundingChunks?.length || 0
       });
+      
+      // Extract actual URLs from grounding chunks
+      if (groundingMetadata.groundingChunks) {
+        realSources = groundingMetadata.groundingChunks
+          .map((chunk: any) => chunk.web?.uri)
+          .filter((uri: string) => uri && uri.startsWith('http'))
+          .slice(0, 10); // Limit to first 10 sources
+        
+        console.log('🔗 Found real sources for', stan.name, ':', realSources);
+      }
+      
+      // Log search queries that were used
+      if (groundingMetadata.webSearchQueries) {
+        console.log('🔍 Search queries used:', groundingMetadata.webSearchQueries);
+      }
     } else {
-      console.log('⚠️ No grounding metadata found - search may not have activated');
+      console.log('⚠️ No grounding metadata found for', stan.name, '- search may not have activated');
     }
     
     // Try to parse structured JSON response
@@ -191,8 +207,9 @@ CRITICAL: Return ONLY the JSON object above, no explanation text, no markdown fo
     
     if (parsedBriefing?.topics) {
       topics = parsedBriefing.topics;
-      searchSources = parsedBriefing.searchSources || [];
-      console.log('✅ Successfully parsed structured briefing for', stan.name, 'with', topics.length, 'topics');
+      // Prioritize real sources from grounding metadata over JSON sources
+      searchSources = realSources.length > 0 ? realSources : (parsedBriefing.searchSources || []);
+      console.log('✅ Successfully parsed structured briefing for', stan.name, 'with', topics.length, 'topics and', searchSources.length, 'real sources');
     } else {
       // Fallback: Extract topics from the structured text
       console.log('📝 Using smart fallback parsing for', stan.name);
@@ -261,11 +278,13 @@ CRITICAL: Return ONLY the JSON object above, no explanation text, no markdown fo
         });
       }
       
-      console.log('📝 Extracted', topics.length, 'topics using smart fallback for', stan.name);
+      // Use real sources from grounding for fallback topics too
+      searchSources = realSources.length > 0 ? realSources : [];
+      console.log('📝 Extracted', topics.length, 'topics using smart fallback for', stan.name, 'with', searchSources.length, 'real sources');
     }
     
-    // Fallback sources if no real sources found
-    const fallbackSources = [
+    // Fallback sources only if we have no real sources at all
+    const fallbackSources = realSources.length > 0 ? realSources : [
       `https://www.google.com/search?q=${encodeURIComponent(stan.name + ' latest news today')}`,
       `https://www.google.com/search?q=${encodeURIComponent(stan.name + ' recent updates ' + new Date().getFullYear())}`
     ];
