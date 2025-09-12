@@ -100,7 +100,7 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredSuggestions, setFilteredSuggestions] = useState<StanSuggestion[]>([]);
-  const [selectedStans, setSelectedStans] = useState<Set<string>>(new Set());
+  const [selectedStans, setSelectedStans] = useState<string[]>([]);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -123,6 +123,11 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
       setFilteredSuggestions(SEARCH_DATABASE.slice(0, 20)); // Show top 20 popular stans by default
     }
   }, [searchQuery]);
+
+  // Debug effect to track selection changes
+  useEffect(() => {
+    console.log('🔍 Selected stans changed:', selectedStans);
+  }, [selectedStans]);
 
   const loadCategories = async () => {
     try {
@@ -152,19 +157,21 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
 
   const toggleStanSelection = useCallback((suggestion: StanSuggestion) => {
     console.log('🔄 toggleStanSelection called for:', suggestion.name, 'ID:', suggestion.id);
-    console.log('🔄 Current selected IDs:', Array.from(selectedStans));
+    console.log('🔄 Current selected IDs:', selectedStans);
     
     setSelectedStans(prevSelected => {
-      const newSelection = new Set(prevSelected);
-      if (newSelection.has(suggestion.id)) {
-        console.log('🗑️ Removing from selection');
-        newSelection.delete(suggestion.id);
+      const newSelection = [...prevSelected];
+      const index = newSelection.indexOf(suggestion.id);
+      
+      if (index > -1) {
+        console.log('🗑️ Removing from selection at index:', index);
+        newSelection.splice(index, 1);
       } else {
         console.log('➕ Adding to selection');
-        newSelection.add(suggestion.id);
+        newSelection.push(suggestion.id);
       }
       
-      console.log('🔄 New selected IDs:', Array.from(newSelection));
+      console.log('🔄 New selected IDs:', newSelection);
       return newSelection;
     });
   }, []);
@@ -172,15 +179,17 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
 
   const clearSelections = useCallback(() => {
     console.log('🧼 Clearing all selections');
-    setSelectedStans(new Set());
+    setSelectedStans([]);
   }, []);
 
   const selectAllVisible = useCallback(() => {
     console.log('✅ Selecting all visible stans');
     setSelectedStans(prevSelected => {
-      const newSelection = new Set(prevSelected);
+      const newSelection = [...prevSelected];
       filteredSuggestions.forEach(suggestion => {
-        newSelection.add(suggestion.id);
+        if (!newSelection.includes(suggestion.id)) {
+          newSelection.push(suggestion.id);
+        }
       });
       return newSelection;
     });
@@ -189,9 +198,9 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
   const handleAddStans = async () => {
     console.log('🔄 handleAddStans called', { selectedCount: selectedStans.size });
     
-    if (selectedStans.size > 0) {
+    if (selectedStans.length > 0) {
       // Bulk add selected stans
-      const selectedSuggestions = SEARCH_DATABASE.filter(s => selectedStans.has(s.id));
+      const selectedSuggestions = SEARCH_DATABASE.filter(s => selectedStans.includes(s.id));
       console.log('📋 Selected suggestions:', selectedSuggestions.map(s => s.name));
       
       if (selectedSuggestions.length === 0) {
@@ -250,7 +259,7 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
         const addedCount = data?.length || selectedSuggestions.length;
         
         // Clear selections
-        setSelectedStans(new Set());
+        setSelectedStans([]);
         setSearchQuery('');
         
         // Navigate back immediately
@@ -279,9 +288,29 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
   };
 
 
-  const renderSuggestion = useCallback(({ item }: { item: StanSuggestion }) => {
-    const isSelected = selectedStans.has(item.id);
-    console.log('🎨 Rendering:', item.name, 'Selected:', isSelected, 'ID:', item.id);
+  const renderSuggestion = ({ item }: { item: StanSuggestion }) => {
+    const isSelected = selectedStans.includes(item.id);
+    console.log('🎨 Rendering:', item.name, 'Selected:', isSelected, 'ID:', item.id, 'Selected array:', selectedStans);
+    
+    const handlePress = () => {
+      console.log('👆 Pressed:', item.name, 'Current state:', selectedStans);
+      
+      setSelectedStans(current => {
+        const newSelection = [...current];
+        const index = newSelection.indexOf(item.id);
+        
+        if (index > -1) {
+          console.log('🗑️ Direct remove from selection');
+          newSelection.splice(index, 1);
+        } else {
+          console.log('➕ Direct add to selection');
+          newSelection.push(item.id);
+        }
+        
+        console.log('🔄 Direct new selected IDs:', newSelection);
+        return newSelection;
+      });
+    };
     
     return (
       <TouchableOpacity
@@ -290,10 +319,7 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
           { borderLeftColor: item.categoryColor },
           isSelected && styles.suggestionCardSelected
         ]}
-        onPress={() => {
-          console.log('👆 Pressed:', item.name);
-          toggleStanSelection(item);
-        }}
+        onPress={handlePress}
         activeOpacity={0.7}
       >
         <View style={styles.suggestionHeader}>
@@ -311,7 +337,7 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
         <Text style={styles.suggestionDescription}>{item.description}</Text>
       </TouchableOpacity>
     );
-  }, [selectedStans, toggleStanSelection]);
+  };
 
   if (loadingCategories) {
     return (
@@ -359,6 +385,13 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
         {/* Search Results */}
         {filteredSuggestions.length > 0 && (
           <View style={styles.suggestionsSection}>
+            {/* Debug Info */}
+            <View style={styles.debugInfo}>
+              <Text style={styles.debugText}>
+                Debug: {selectedStans.length} selected: [{selectedStans.join(', ')}]
+              </Text>
+            </View>
+            
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>
                 {searchQuery.trim().length > 0 ? 'Search Results' : 'Popular Suggestions'}
@@ -381,10 +414,10 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
               </View>
             </View>
             
-            {selectedStans.size > 0 && (
+            {selectedStans.length > 0 && (
               <View style={styles.selectedCounter}>
                 <Text style={styles.selectedCounterText}>
-                  {selectedStans.size} selected
+                  {selectedStans.length} selected
                 </Text>
               </View>
             )}
@@ -400,7 +433,7 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
               initialNumToRender={8}
               maxToRenderPerBatch={5}
               windowSize={10}
-              extraData={selectedStans}
+              extraData={selectedStans.length}
               ListFooterComponent={() => <View style={{ height: 20 }} />}
             />
             
@@ -410,18 +443,18 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
                 style={[
                   styles.bulkAddButton, 
                   loading && styles.addButtonDisabled,
-                  selectedStans.size === 0 && styles.addButtonDisabled
+                  selectedStans.length === 0 && styles.addButtonDisabled
                 ]}
                 onPress={handleAddStans}
-                disabled={loading || selectedStans.size === 0}
+                disabled={loading || selectedStans.length === 0}
                 activeOpacity={0.8}
               >
                 <Text style={styles.bulkAddButtonText}>
                   {loading 
                     ? 'Adding...' 
-                    : selectedStans.size === 0
+                    : selectedStans.length === 0
                     ? 'Select stans to follow'
-                    : `✨ Start Following ${selectedStans.size} ${selectedStans.size === 1 ? 'Stan' : 'Stans'}`
+                    : `✨ Start Following ${selectedStans.length} ${selectedStans.length === 1 ? 'Stan' : 'Stans'}`
                   }
                 </Text>
               </TouchableOpacity>
@@ -707,5 +740,19 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Debug styles
+  debugInfo: {
+    backgroundColor: '#fff3cd',
+    padding: 8,
+    marginBottom: 8,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#ffeaa7',
+  },
+  debugText: {
+    fontSize: 12,
+    color: '#856404',
+    fontFamily: 'monospace',
   },
 });
