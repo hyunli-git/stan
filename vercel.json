@@ -1,8 +1,7 @@
 {
-  "name": "stan-backend",
-  "version": 2,
-  "framework": "nextjs",
-  "rootDirectory": "stan-backend",
+  "buildCommand": "cd stan-backend && npm run build",
+  "installCommand": "cd stan-backend && npm install",
+  "outputDirectory": "stan-backend/.next",
   "crons": [
     {
       "path": "/api/generate-daily-briefings",
