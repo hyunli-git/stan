@@ -4,8 +4,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Initialize with service role to bypass RLS for server-side operations
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co",
+  process.env.SUPABASE_SERVICE_ROLE_KEY || "placeholder-key"
 );
 
 // Verify service role key is configured
@@ -14,7 +14,7 @@ if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
 }
 
 // Initialize Gemini 2.5 Flash with Grounding
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || "placeholder-key");
 const model = genAI.getGenerativeModel({ 
   model: "gemini-2.0-flash-exp"
 });

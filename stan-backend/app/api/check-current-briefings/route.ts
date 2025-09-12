@@ -1,16 +1,18 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-// This endpoint helps us check what briefings are currently in the database
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { supabaseAdmin, isSupabaseConfigured } from '../../../lib/supabase-admin';
 
 export async function GET() {
   try {
+    // Check if Supabase is configured
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json({
+        success: false,
+        error: 'Supabase not configured'
+      }, { status: 503 });
+    }
+
     // Get current briefings with their stan info
-    const { data: briefings, error } = await supabase
+    const { data: briefings, error } = await supabaseAdmin
       .from('briefings')
       .select(`
         id,
@@ -69,8 +71,16 @@ export async function GET() {
 
 export async function POST() {
   try {
+    // Check if Supabase is configured
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json({
+        success: false,
+        error: 'Supabase not configured'
+      }, { status: 503 });
+    }
+
     // Simple database test - just count briefings
-    const { count, error } = await supabase
+    const { count, error } = await supabaseAdmin
       .from('briefings')
       .select('*', { count: 'exact', head: true });
 
