@@ -10,12 +10,15 @@ import {
   TextInput,
   SafeAreaView,
   Linking,
+  ScrollView,
+  Image,
+  Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { generateAIBriefingWithWebSearch } from '../services/openaiService';
+// Import removed - using daily briefings API instead
 
 interface Stan {
   id: string;
@@ -30,10 +33,18 @@ interface Stan {
   };
 }
 
+interface ImageData {
+  url: string;
+  alt: string;
+  source: string;
+  thumbnail?: string;
+}
+
 interface BriefingTopic {
   title: string;
   content: string;
   sources?: string[];
+  images?: ImageData[];
 }
 
 interface BriefingContent {
@@ -44,6 +55,17 @@ interface BriefingContent {
   searchSources?: string[];
 }
 
+interface DailyBriefing {
+  id: string;
+  stan_id: string;
+  date: string;
+  content: string; // JSON string
+  topics: BriefingTopic[];
+  search_sources: string[];
+  created_at: string;
+  stans: Stan;
+}
+
 interface BriefingCard {
   id: string;
   stan: Stan;
@@ -52,52 +74,53 @@ interface BriefingCard {
   error: string | null;
 }
 
-interface StanSuggestion {
-  id: string;
-  name: string;
-  category: string;
-  categoryIcon: string;
-  categoryColor: string;
-  description: string;
-  categoryId?: string;
-}
 
 interface HomeScreenProps {
   navigation: any;
 }
 
-// Popular stans database
-const POPULAR_STANS: StanSuggestion[] = [
-  // K-Pop & Entertainment
-  { id: '1', name: 'BTS', category: 'K-Pop', categoryIcon: '🎵', categoryColor: '#FF6B6B', description: 'Global superstars breaking barriers worldwide' },
-  { id: '2', name: 'BLACKPINK', category: 'K-Pop', categoryIcon: '🎵', categoryColor: '#FF6B6B', description: 'Queens of K-Pop with killer fashion and music' },
-  { id: '16', name: 'K-Pop Demon Hunters', category: 'Movies & TV', categoryIcon: '🎬', categoryColor: '#F9F871', description: 'Netflix\'s biggest movie ever - K-Pop girl group fights demons!' },
-  { id: '17', name: 'aespa', category: 'K-Pop', categoryIcon: '🎵', categoryColor: '#FF6B6B', description: 'Next-generation K-Pop with virtual avatars' },
-  { id: '18', name: 'TWICE', category: 'K-Pop', categoryIcon: '🎵', categoryColor: '#FF6B6B', description: 'Feel-good K-Pop with infectious energy' },
-  
-  // Music - Western
-  { id: '3', name: 'Taylor Swift', category: 'Music', categoryIcon: '🎸', categoryColor: '#C34A36', description: 'Storytelling genius breaking records with every era' },
-  { id: '4', name: 'Bad Bunny', category: 'Music', categoryIcon: '🎸', categoryColor: '#C34A36', description: 'Reggaeton king bringing Latin music to the world' },
-  { id: '5', name: 'Tyler, the Creator', category: 'Music', categoryIcon: '🎸', categoryColor: '#C34A36', description: 'Creative visionary pushing boundaries in music and fashion' },
-  { id: '22', name: 'Drake', category: 'Music', categoryIcon: '🎸', categoryColor: '#C34A36', description: 'Hip-hop icon dominating charts for over a decade' },
-  { id: '23', name: 'Billie Eilish', category: 'Music', categoryIcon: '🎸', categoryColor: '#C34A36', description: 'Genre-defying artist with haunting melodies' },
-  
-  // Sports
-  { id: '6', name: 'Los Angeles Lakers', category: 'Sports', categoryIcon: '⚽', categoryColor: '#4ECDC4', description: 'Purple and Gold legends with championship legacy' },
-  { id: '7', name: 'Real Madrid', category: 'Sports', categoryIcon: '⚽', categoryColor: '#4ECDC4', description: 'Los Blancos - the most successful club in football' },
-  { id: '8', name: 'Manchester United', category: 'Sports', categoryIcon: '⚽', categoryColor: '#4ECDC4', description: 'Red Devils with massive global fanbase' },
-  { id: '11', name: 'Toronto Blue Jays', category: 'Sports', categoryIcon: '⚽', categoryColor: '#4ECDC4', description: 'Canada\'s team with passionate fans and exciting young talent' },
-  { id: '28', name: 'Golden State Warriors', category: 'Sports', categoryIcon: '⚽', categoryColor: '#4ECDC4', description: 'Dynasty team revolutionizing basketball' },
-  
-  // Gaming
-  { id: '12', name: 'League of Legends', category: 'Gaming', categoryIcon: '🎮', categoryColor: '#845EC2', description: 'The world\'s biggest esport with epic competitions' },
-  { id: '13', name: 'Valorant', category: 'Gaming', categoryIcon: '🎮', categoryColor: '#845EC2', description: 'Tactical shooter taking esports by storm' },
-  { id: '14', name: 'Fortnite', category: 'Gaming', categoryIcon: '🎮', categoryColor: '#845EC2', description: 'Battle royale phenomenon with constant updates' },
-  { id: '15', name: 'Minecraft', category: 'Gaming', categoryIcon: '🎮', categoryColor: '#845EC2', description: 'Infinite creativity in blocky worlds' },
-  
-  // Movies & TV
-  { id: '36', name: 'Marvel Cinematic Universe', category: 'Movies & TV', categoryIcon: '🎬', categoryColor: '#F9F871', description: 'Superhero franchise connecting movies and shows' },
-];
+
+const { width: screenWidth } = Dimensions.get('window');
+
+// Component to render scrollable images
+const ImageCarousel = ({ images }: { images: ImageData[] }) => {
+  if (!images || images.length === 0) return null;
+
+  return (
+    <View style={styles.imageCarouselContainer}>
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        pagingEnabled={false}
+        style={styles.imageCarousel}
+        contentContainerStyle={styles.imageCarouselContent}
+      >
+        {images.map((image, index) => (
+          <TouchableOpacity 
+            key={index}
+            style={styles.imageContainer}
+            onPress={() => {
+              Alert.alert(
+                'View Image',
+                image.alt,
+                [
+                  { text: 'Cancel' },
+                  { text: 'View Source', onPress: () => Linking.openURL(image.source) }
+                ]
+              );
+            }}
+          >
+            <Image 
+              source={{ uri: image.thumbnail || image.url }}
+              style={styles.briefingImage}
+              resizeMode="cover"
+            />
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
+};
 
 export default function HomeScreen({ navigation }: HomeScreenProps) {
   const { user, signOut } = useAuth();
@@ -115,6 +138,133 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const loadStansAndGenerateBriefings = async () => {
     setLoading(true);
     try {
+      const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://stan-peach.vercel.app';
+      
+      // Only fetch briefings if user is logged in
+      let data;
+      
+      if (user?.id) {
+        console.log(`🔍 Fetching briefings for user: ${user.id}`);
+        const response = await fetch(`${backendUrl}/api/daily-briefings?userId=${user.id}`);
+        
+        if (response.ok) {
+          data = await response.json();
+          console.log(`📰 Loaded ${data.briefings?.length || 0} briefings for user ${user.id}`);
+          
+          // Debug: Log briefing stans to verify they belong to user
+          if (data.briefings && data.briefings.length > 0) {
+            console.log('🔍 Briefing stans:', data.briefings.map(b => ({ 
+              stanId: b.stan_id, 
+              stanName: b.stans?.name 
+            })));
+          }
+        } else {
+          console.error('Failed to fetch user briefings:', response.status, response.statusText);
+          throw new Error('Failed to fetch briefings');
+        }
+      } else {
+        // No user logged in - redirect to auth
+        console.log('⚠️ No user logged in');
+        throw new Error('User not authenticated');
+      }
+      
+      const dailyBriefings: DailyBriefing[] = data.briefings || [];
+      
+      console.log(`📰 Loaded ${dailyBriefings.length} briefings for user`);
+      
+      if (dailyBriefings.length === 0) {
+        // No briefings available for user's stans - check if user has stans
+        console.log('⚠️ No briefings found for user stans, attempting to generate...');
+        
+        // Trigger briefing generation for this user
+        try {
+          const genResponse = await fetch(`${backendUrl}/api/force-generate-briefings`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ userId: user.id }),
+          });
+          
+          if (genResponse.ok) {
+            const genData = await genResponse.json();
+            console.log('✅ Briefing generation triggered:', genData);
+            
+            // Wait a moment then retry fetching briefings
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Retry fetching briefings
+            const retryResponse = await fetch(`${backendUrl}/api/daily-briefings?userId=${user.id}`);
+            if (retryResponse.ok) {
+              const retryData = await retryResponse.json();
+              const retryBriefings = retryData.briefings || [];
+              
+              if (retryBriefings.length > 0) {
+                console.log(`📰 Successfully loaded ${retryBriefings.length} newly generated briefings`);
+                
+                // Convert to briefing cards
+                const cards: BriefingCard[] = retryBriefings.map(briefing => ({
+                  id: briefing.id,
+                  stan: briefing.stans,
+                  briefing: {
+                    content: briefing.content,
+                    summary: briefing.topics[0]?.content.split('.')[0] + '.' || 'Daily update available',
+                    sources: briefing.search_sources,
+                    topics: briefing.topics,
+                    searchSources: briefing.search_sources,
+                  },
+                  loading: false,
+                  error: null,
+                }));
+                
+                setBriefingCards(cards);
+                setStans(retryBriefings.map(b => b.stans));
+                return;
+              }
+            }
+          }
+        } catch (genError) {
+          console.error('Failed to generate briefings:', genError);
+        }
+        
+        // If still no briefings, show placeholder
+        await checkForStansWithoutBriefings();
+        return;
+      }
+      
+      // Convert daily briefings to briefing cards
+      const cards: BriefingCard[] = dailyBriefings.map(briefing => ({
+        id: briefing.id,
+        stan: briefing.stans,
+        briefing: {
+          content: briefing.content,
+          summary: briefing.topics[0]?.content.split('.')[0] + '.' || 'Daily update available',
+          sources: briefing.search_sources,
+          topics: briefing.topics,
+          searchSources: briefing.search_sources,
+        },
+        loading: false,
+        error: null,
+      }));
+      
+      setBriefingCards(cards);
+      setStans(dailyBriefings.map(b => b.stans));
+      
+    } catch (error) {
+      console.error('Error loading briefings:', error);
+      Alert.alert('Error', 'Failed to load briefings');
+      // Fallback: try to load stans without briefings
+      await checkForStansWithoutBriefings();
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const checkForStansWithoutBriefings = async () => {
+    try {
+      console.log(`🔍 Checking user stans for user: ${user?.id}`);
+      // Get user's stans to show even without briefings
       const { data, error } = await supabase
         .from('stans')
         .select(`
@@ -132,56 +282,63 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       if (error) throw error;
       
       const stansData = data || [];
+      console.log(`📋 User has ${stansData.length} stans:`, stansData.map(s => s.name));
       setStans(stansData);
       
-      // Initialize briefing cards with loading state
-      const initialCards: BriefingCard[] = stansData.map(stan => ({
+      // Show cards with better placeholder content
+      const placeholderCards: BriefingCard[] = stansData.map(stan => ({
         id: stan.id,
         stan: stan,
-        briefing: null,
-        loading: true,
+        briefing: {
+          content: `Getting the latest updates for ${stan.name}...`,
+          summary: 'Refreshing content...',
+          sources: [],
+          topics: [
+            {
+              title: '🔄 Generating Fresh Content',
+              content: `We're fetching the latest news and updates about ${stan.name}. This usually takes just a moment. Pull down to refresh!`,
+              sources: []
+            },
+            {
+              title: '💡 While You Wait',
+              content: `Your personalized briefing will include breaking news, social media buzz, and upcoming events. Content updates daily!`,
+              sources: []
+            }
+          ],
+          searchSources: []
+        },
+        loading: false,
         error: null,
       }));
       
-      setBriefingCards(initialCards);
+      setBriefingCards(placeholderCards);
       
-      // Generate briefings for each stan
-      for (const stan of stansData) {
-        generateBriefingForStan(stan);
-      }
+      // Trigger briefing generation after showing placeholder
+      setTimeout(async () => {
+        console.log('⏰ Auto-triggering briefing generation...');
+        try {
+          const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://stan-peach.vercel.app';
+          const genResponse = await fetch(`${backendUrl}/api/force-generate-briefings`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ userId: user?.id }),
+          });
+          
+          if (genResponse.ok) {
+            console.log('✅ Briefings generated, refreshing...');
+            // Refresh to show new content
+            await loadStansAndGenerateBriefings();
+          }
+        } catch (genError) {
+          console.error('Auto-generation failed:', genError);
+        }
+      }, 2000);
       
     } catch (error) {
       console.error('Error loading stans:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  const generateBriefingForStan = async (stan: Stan) => {
-    try {
-      console.log('🤖 Generating briefing for:', stan.name);
-      
-      const briefingContent = await generateAIBriefingWithWebSearch({
-        id: stan.id,
-        name: stan.name,
-        categories: stan.categories,
-        description: stan.description
-      });
-      
-      setBriefingCards(prev => prev.map(card => 
-        card.id === stan.id 
-          ? { ...card, briefing: briefingContent, loading: false, error: null }
-          : card
-      ));
-      
-    } catch (error: any) {
-      console.error('Error generating briefing for', stan.name, ':', error);
-      setBriefingCards(prev => prev.map(card => 
-        card.id === stan.id 
-          ? { ...card, briefing: null, loading: false, error: error.message || 'Failed to generate briefing' }
-          : card
-      ));
+      Alert.alert('Error', 'Failed to load your stans');
     }
   };
 
@@ -252,7 +409,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             <View style={styles.cardActions}>
               <TouchableOpacity 
                 style={styles.retryButton}
-                onPress={() => generateBriefingForStan(item.stan)}
+                onPress={() => loadStansAndGenerateBriefings()}
               >
                 <Text style={styles.actionButtonText}>Retry</Text>
               </TouchableOpacity>
@@ -283,6 +440,9 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 <Text style={styles.topicTitle}>{topic.title}</Text>
                 <Text style={styles.topicContent}>{topic.content}</Text>
                 
+                {/* Image carousel for topic */}
+                <ImageCarousel images={topic.images || []} />
+                
                 <View style={styles.cardActions}>
                   {topic.sources && topic.sources.length > 0 && (
                     <TouchableOpacity 
@@ -301,12 +461,6 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                       <Text style={styles.actionButtonText}>View Sources</Text>
                     </TouchableOpacity>
                   )}
-                  <TouchableOpacity 
-                    style={styles.moreButton}
-                    onPress={() => navigation.navigate('Briefing', { stan: item.stan, briefing: item.briefing })}
-                  >
-                    <Text style={styles.moreButtonText}>→</Text>
-                  </TouchableOpacity>
                 </View>
               </LinearGradient>
             </View>
@@ -337,23 +491,58 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
 
 
-  const renderHeader = () => (
-    <View style={styles.header}>
-      <View>
-        <Text style={styles.title}>🌟 Your Daily STAN Briefings</Text>
-        <Text style={styles.welcome}>
-          {briefingCards.length > 0 
-            ? `${briefingCards.length} briefings generated` 
-            : 'Loading your personalized briefings...'}
-        </Text>
+  const renderStanStory = ({ item }: { item: Stan }) => (
+    <TouchableOpacity style={styles.stanStory}>
+      <View style={[styles.stanStoryImage, { backgroundColor: item.categories.color }]}>
+        <Text style={styles.stanStoryIcon}>{item.categories.icon}</Text>
       </View>
-      <TouchableOpacity
-        style={styles.signOutButton}
-        onPress={handleSignOut}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.signOutText}>Sign Out</Text>
-      </TouchableOpacity>
+      <Text style={styles.stanStoryName} numberOfLines={1}>
+        {item.name}
+      </Text>
+    </TouchableOpacity>
+  );
+
+  const renderHeader = () => (
+    <View style={styles.headerContainer}>
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <View style={styles.logoContainer}>
+            <Image 
+              source={require('../assets/stan-logo.png')} 
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.title}>STAN</Text>
+          </View>
+          <Text style={styles.welcome}>
+            {briefingCards.length > 0 
+              ? `${briefingCards.length} briefings generated` 
+              : 'Loading your personalized briefings...'}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.signOutButton}
+          onPress={handleSignOut}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.signOutText}>Sign Out</Text>
+        </TouchableOpacity>
+      </View>
+      
+      {/* Stan Stories - Horizontal Scroll */}
+      {stans.length > 0 && (
+        <View style={styles.stanStoriesSection}>
+          <FlatList
+            data={stans}
+            renderItem={renderStanStory}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.stanStoriesContent}
+            ItemSeparatorComponent={() => <View style={{ width: 12 }} />}
+          />
+        </View>
+      )}
     </View>
   );
 
@@ -376,7 +565,14 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   if (loading && briefingCards.length === 0) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <Text style={styles.title}>🌟 STAN</Text>
+        <View style={styles.loadingLogoContainer}>
+          <Image 
+            source={require('../assets/stan-logo.png')} 
+            style={styles.loadingLogo}
+            resizeMode="contain"
+          />
+          <Text style={styles.title}>STAN</Text>
+        </View>
         <Text style={styles.loadingText}>Loading your briefings...</Text>
       </SafeAreaView>
     );
@@ -432,6 +628,9 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                   <Text style={styles.topicTitle}>{item.topic.title}</Text>
                   <Text style={styles.topicContent}>{item.topic.content}</Text>
                   
+                  {/* Image carousel for topic */}
+                  <ImageCarousel images={item.topic.images || []} />
+                  
                   <View style={styles.cardActions}>
                     {item.topic.sources && item.topic.sources.length > 0 && (
                       <TouchableOpacity 
@@ -450,12 +649,6 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                         <Text style={styles.actionButtonText}>View Sources</Text>
                       </TouchableOpacity>
                     )}
-                    <TouchableOpacity 
-                      style={styles.moreButton}
-                      onPress={() => navigation.navigate('Briefing', { stan: item.stan, briefing: item.briefing })}
-                    >
-                      <Text style={styles.moreButtonText}>→</Text>
-                    </TouchableOpacity>
                   </View>
                 </LinearGradient>
               </View>
@@ -498,10 +691,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#ffffff',
   },
+  loadingLogoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  loadingLogo: {
+    width: 48,
+    height: 48,
+    marginRight: 12,
+  },
   loadingText: {
     fontSize: 16,
     color: '#666',
     marginTop: 10,
+  },
+  headerContainer: {
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   header: {
     flexDirection: 'row',
@@ -509,9 +717,19 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingHorizontal: 24,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    backgroundColor: '#ffffff',
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  logo: {
+    width: 32,
+    height: 32,
+    marginRight: 8,
   },
   searchSection: {
     paddingHorizontal: 24,
@@ -844,5 +1062,60 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#666',
+  },
+  imageCarouselContainer: {
+    marginVertical: 12,
+  },
+  imageCarousel: {
+    flexGrow: 0,
+  },
+  imageCarouselContent: {
+    paddingRight: 16,
+  },
+  imageContainer: {
+    marginRight: 12,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  briefingImage: {
+    width: 120,
+    height: 80,
+    borderRadius: 8,
+  },
+  stanStoriesSection: {
+    paddingVertical: 16,
+    paddingLeft: 24,
+  },
+  stanStoriesContent: {
+    paddingRight: 24,
+  },
+  stanStory: {
+    alignItems: 'center',
+    width: 70,
+  },
+  stanStoryImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  stanStoryIcon: {
+    fontSize: 24,
+  },
+  stanStoryName: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    fontWeight: '500',
   },
 });

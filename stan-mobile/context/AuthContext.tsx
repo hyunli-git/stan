@@ -5,9 +5,11 @@ import { supabase } from '../lib/supabase';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  isNewUser: boolean;
   signUp: (email: string, password: string, username: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  markOnboardingComplete: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -15,6 +17,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isNewUser, setIsNewUser] = useState(false);
 
   useEffect(() => {
     console.log('AuthProvider initializing...');
@@ -76,6 +79,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw error;
     }
 
+    // Mark as new user for onboarding
+    setIsNewUser(true);
+
     // For development: try to automatically confirm the user
     if (data.user && !data.user.email_confirmed_at) {
       console.log('⚠️ User created but email not confirmed. For development, trying to sign in anyway...');
@@ -99,6 +105,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw error;
     }
 
+    // Mark as returning user (skip onboarding)
+    setIsNewUser(false);
+
     return data;
   };
 
@@ -109,14 +118,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const markOnboardingComplete = () => {
+    setIsNewUser(false);
+  };
+
   return (
     <AuthContext.Provider
       value={{
         user,
         loading,
+        isNewUser,
         signUp,
         signIn,
         signOut,
+        markOnboardingComplete,
       }}
     >
       {children}

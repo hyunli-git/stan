@@ -1,0 +1,16 @@
+{
+  "name": "stan-backend",
+  "version": 2,
+  "framework": "nextjs",
+  "rootDirectory": "stan-backend",
+  "crons": [
+    {
+      "path": "/api/generate-daily-briefings",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/generate-real-briefings", 
+      "schedule": "0 */6 * * *"
+    }
+  ]
+}

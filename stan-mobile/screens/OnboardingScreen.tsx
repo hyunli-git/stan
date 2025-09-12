@@ -55,7 +55,7 @@ export default function OnboardingScreen({ navigation }: OnboardingScreenProps) 
   const [selectedStans, setSelectedStans] = useState<StanSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
-  const { user } = useAuth();
+  const { user, markOnboardingComplete } = useAuth();
 
   useEffect(() => {
     loadCategories();
@@ -127,10 +127,16 @@ export default function OnboardingScreen({ navigation }: OnboardingScreenProps) 
 
       if (error) throw error;
 
+      // Mark onboarding as complete
+      markOnboardingComplete();
+      
+      // Navigate directly to MainTabs
+      navigation.navigate('MainTabs');
+      
+      // Show success message
       Alert.alert(
         '🎉 Welcome to STAN!', 
-        `You're now following ${selectedStans.length} things. Get ready for your daily briefings!`,
-        [{ text: 'Let\'s Go!', onPress: () => navigation.navigate('MainTabs') }]
+        `You're now following ${selectedStans.length} things. Get ready for your daily briefings!`
       );
     } catch (error: any) {
       console.error('Error adding stans:', error);

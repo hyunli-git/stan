@@ -68,18 +68,6 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
           <TouchableOpacity 
             style={styles.menuItem}
-            onPress={() => navigation.navigate('Briefings')}
-          >
-            <Text style={styles.menuIcon}>📰</Text>
-            <View style={styles.menuText}>
-              <Text style={styles.menuTitle}>Daily Briefings</Text>
-              <Text style={styles.menuDescription}>AI-powered updates about your stans</Text>
-            </View>
-            <Text style={styles.menuArrow}>›</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.menuItem}
             onPress={() => navigation.navigate('AddStan')}
           >
             <Text style={styles.menuIcon}>➕</Text>

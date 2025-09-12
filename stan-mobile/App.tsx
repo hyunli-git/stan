@@ -71,7 +71,7 @@ function MainTabs() {
 }
 
 function AppNavigator() {
-  const { user, loading } = useAuth();
+  const { user, loading, isNewUser } = useAuth();
 
   if (loading) {
     return null; // Or a loading screen
@@ -89,11 +89,25 @@ function AppNavigator() {
         ) : (
           // Main app screens
           <>
-            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-            <Stack.Screen name="MainTabs" component={MainTabs} />
-            <Stack.Screen name="Briefing" component={BriefingScreen} />
-            <Stack.Screen name="PromptManager" component={PromptManagerScreen} />
-            <Stack.Screen name="TestApp" component={TestApp} />
+            {isNewUser ? (
+              // New users see onboarding first
+              <>
+                <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+                <Stack.Screen name="MainTabs" component={MainTabs} />
+                <Stack.Screen name="Briefing" component={BriefingScreen} />
+                <Stack.Screen name="PromptManager" component={PromptManagerScreen} />
+                <Stack.Screen name="TestApp" component={TestApp} />
+              </>
+            ) : (
+              // Returning users go directly to MainTabs
+              <>
+                <Stack.Screen name="MainTabs" component={MainTabs} />
+                <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+                <Stack.Screen name="Briefing" component={BriefingScreen} />
+                <Stack.Screen name="PromptManager" component={PromptManagerScreen} />
+                <Stack.Screen name="TestApp" component={TestApp} />
+              </>
+            )}
           </>
         )}
       </Stack.Navigator>
