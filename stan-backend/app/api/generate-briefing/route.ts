@@ -2,10 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co",
-  process.env.SUPABASE_SERVICE_ROLE_KEY || "placeholder-key"
-);
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Missing Supabase environment variables');
+  }
+  
+  return createClient(supabaseUrl, supabaseKey);
+}
 
 // Initialize Gemini 2.5 Flash with Grounding
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || "placeholder-key");
@@ -30,10 +36,18 @@ interface Stan {
   description?: string;
 }
 
+interface ImageData {
+  url: string;
+  alt: string;
+  source: string;
+  thumbnail?: string;
+}
+
 interface BriefingTopic {
   title: string;
   content: string;
   sources?: string[];
+  images?: ImageData[];
 }
 
 interface BriefingContent {
@@ -67,6 +81,65 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// Function to extract images from various sources
+const extractImagesFromSources = async (sources: string[]): Promise<ImageData[]> => {
+  const images: ImageData[] = [];
+  
+  for (const source of sources) {
+    try {
+      // YouTube thumbnail
+      if (source.includes('youtube.com') || source.includes('youtu.be')) {
+        const videoIdMatch = source.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+        if (videoIdMatch) {
+          const videoId = videoIdMatch[1];
+          const thumbnail = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+          images.push({
+            url: thumbnail,
+            alt: 'YouTube video thumbnail',
+            source: source,
+            thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+          });
+        }
+      }
+      
+      // TikTok thumbnail (placeholder)
+      else if (source.includes('tiktok.com')) {
+        images.push({
+          url: 'https://via.placeholder.com/400x600/000000/ffffff?text=TikTok+Video',
+          alt: 'TikTok video',
+          source: source,
+          thumbnail: 'https://via.placeholder.com/200x300/000000/ffffff?text=TikTok'
+        });
+      }
+      
+      // Instagram post (placeholder)
+      else if (source.includes('instagram.com')) {
+        images.push({
+          url: 'https://via.placeholder.com/400x400/E4405F/ffffff?text=Instagram+Post',
+          alt: 'Instagram post',
+          source: source,
+          thumbnail: 'https://via.placeholder.com/200x200/E4405F/ffffff?text=Instagram'
+        });
+      }
+      
+      // Twitter/X post (placeholder)
+      else if (source.includes('twitter.com') || source.includes('x.com')) {
+        images.push({
+          url: 'https://via.placeholder.com/400x200/1DA1F2/ffffff?text=Twitter+Post',
+          alt: 'Twitter post',
+          source: source,
+          thumbnail: 'https://via.placeholder.com/200x100/1DA1F2/ffffff?text=Twitter'
+        });
+      }
+      
+    } catch (error) {
+      console.error(`Error extracting image from ${source}:`, error);
+    }
+  }
+  
+  return images;
+};
+
 const generateAIBriefingWithWebSearch = async (stan: Stan, userId?: string): Promise<BriefingContent> => {
   try {
     const today = new Date().toLocaleDateString('en-US', {
@@ -79,6 +152,7 @@ const generateAIBriefingWithWebSearch = async (stan: Stan, userId?: string): Pro
     // Fetch custom prompt if userId is provided
     let customPrompt = null;
     if (userId) {
+      const supabase = getSupabaseClient();
       const { data } = await supabase
         .from('stan_prompts')
         .select('*')
@@ -238,6 +312,20 @@ CRITICAL REQUIREMENTS:
       `https://www.google.com/search?q=${encodeURIComponent(stan.name + ' latest news today')}`,
       `https://www.google.com/search?q=${encodeURIComponent(stan.name + ' recent updates ' + new Date().getFullYear())}`
     ];
+
+    // Extract images from all sources
+    const allSources = searchSources.length > 0 ? searchSources : fallbackSources;
+    const topicSources = topics.flatMap(topic => topic.sources || []);
+    const extractedImages = await extractImagesFromSources([...allSources, ...topicSources]);
+    
+    // Add images to topics based on their sources
+    for (const topic of topics) {
+      if (topic.sources && topic.sources.length > 0) {
+        topic.images = await extractImagesFromSources(topic.sources);
+      }
+    }
+    
+    console.log(`🖼️ Extracted ${extractedImages.length} images for ${stan.name}`);
 
     return {
       content: briefingText, // Keep for backward compatibility

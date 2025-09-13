@@ -1,19 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co",
-  process.env.SUPABASE_SERVICE_ROLE_KEY || "placeholder-key"
-);
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Missing Supabase environment variables');
+  }
+  
+  return createClient(supabaseUrl, supabaseKey);
+}
 
 // GET: Fetch all today's briefings (admin view)
 export async function GET() {
   try {
+    const supabase = getSupabaseClient();
     const today = new Date().toISOString().split('T')[0];
 
-    // Get all briefings for today with stan details
-    const { data: briefings, error } = await supabase
-      .from('daily_briefings')
+    // Try to get briefings from 'briefings' table first
+    let { data: briefings, error } = await supabase
+      .from('briefings')
       .select(`
         *,
         stans (
@@ -27,8 +34,33 @@ export async function GET() {
           )
         )
       `)
-      .eq('date', today)
       .order('created_at', { ascending: false });
+    
+    // If no briefings found, try 'daily_briefings' table
+    if (!briefings || briefings.length === 0) {
+      const dailyResult = await supabase
+        .from('daily_briefings')
+        .select(`
+          *,
+          stans (
+            id,
+            name,
+            description,
+            categories (
+              name,
+              icon,
+              color
+            )
+          )
+        `)
+        .eq('date', today)
+        .order('created_at', { ascending: false });
+      
+      if (dailyResult.data) {
+        briefings = dailyResult.data;
+        error = dailyResult.error;
+      }
+    }
 
     if (error) throw error;
 

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 function getSupabaseClient() {
@@ -66,7 +66,6 @@ const extractImagesFromSources = async (sources: string[]): Promise<any[]> => {
   return images;
 };
 
-// Test with Perplexity API for real-time web search
 const generateWithPerplexity = async (stanName: string, category: string) => {
   try {
     const today = new Date().toLocaleDateString('en-US', { 
@@ -126,9 +125,19 @@ Return as JSON with ACTUAL URLs to specific posts/videos (not just domain names)
       "sources": ["actual_airport_photo", "actual_event_coverage", "actual_sighting_post"]
     },
     {
+      "title": "🤝 Collaborations & Industry News",
+      "content": "New collaborations, brand partnerships, industry connections, or business updates. Include partner details and project information!",
+      "sources": ["actual_collab_announcement", "actual_brand_partnership", "actual_industry_news"]
+    },
+    {
       "title": "💝 Personal Updates & Life Moments",
       "content": "Personal posts, life updates, family moments, or intimate shares from the artist. Include emotional fan reactions and personal details!",
       "sources": ["actual_personal_post", "actual_life_update", "actual_intimate_moment"]
+    },
+    {
+      "title": "📅 Upcoming & Future Plans",
+      "content": "Confirmed upcoming events, teased releases, tour dates, or future projects fans are anticipating. Include countdowns and preparation details!",
+      "sources": ["actual_announcement", "actual_teaser", "actual_tour_date"]
     }
   ]
 }
@@ -147,28 +156,30 @@ IMPORTANT:
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'llama-3.1-sonar-large-128k-online', // Using large model for better understanding
+        model: 'llama-3.1-sonar-large-128k-online',
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.85, // Higher temperature for more lively, creative content
-        max_tokens: 1200 // More tokens for detailed responses
+        temperature: 0.85,
+        max_tokens: 1200
       })
     });
 
     if (!response.ok) {
+      const error = await response.text();
+      console.error('Perplexity API error:', error);
       throw new Error(`Perplexity API error: ${response.status}`);
     }
 
     const data = await response.json();
     const content = data.choices[0].message.content;
 
-    // Try to parse JSON
+    // Parse the response
     try {
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
         
         // Extract all sources
-        const allSources = parsed.topics.flatMap((t: { sources?: string[] }) => t.sources || []);
+        const allSources = parsed.topics.flatMap((t: any) => t.sources || []);
         
         // Extract images from sources
         const images = await extractImagesFromSources(allSources);
@@ -187,13 +198,13 @@ IMPORTANT:
         };
       }
     } catch (parseError) {
-      console.log('Parse error:', parseError);
+      console.error('Parse error:', parseError);
     }
 
     // Fallback
     return {
       topics: [{
-        title: "Real-Time Update",
+        title: "📰 Today's Update",
         content: content.substring(0, 200) + "...",
         sources: []
       }],
@@ -202,65 +213,141 @@ IMPORTANT:
     };
 
   } catch (error) {
-    console.error('Perplexity error:', error);
-    return {
-      topics: [{
-        title: "Daily Update",
-        content: `Unable to generate briefing for ${stanName} using web search. Please try again later.`,
-        sources: []
-      }],
-      searchSources: [],
-      images: []
-    };
+    console.error('Perplexity generation error:', error);
+    throw error;
   }
 };
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
+    // Check for Perplexity API key
     if (!process.env.PERPLEXITY_API_KEY) {
       return NextResponse.json({
         error: 'Perplexity API key not configured',
-        message: 'Add PERPLEXITY_API_KEY to environment variables',
-        setup: 'Get API key at: https://www.perplexity.ai/settings/api'
+        message: 'Please add PERPLEXITY_API_KEY to environment variables',
+        setup: 'Get your API key at: https://www.perplexity.ai/settings/api'
       }, { status: 500 });
     }
 
-    // Test with just BTS first
-    const testStan = {
-      id: 'test',
-      name: 'BTS',
-      user_id: '00000000-0000-0000-0000-000000000000',
-      categories: { name: 'K-Pop', icon: '🎵', color: '#FF6B6B' }
-    };
+    console.log('🗑️ Step 1: Clearing ALL old briefings...');
+    
+    // Clear ALL briefings from both tables
+    const { error: clearBriefingsError } = await supabase
+      .from('briefings')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+    
+    const { error: clearDailyError } = await supabase
+      .from('daily_briefings')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
 
-    console.log('🔍 Testing Perplexity API for real-time search...');
-    const briefingContent = await generateWithPerplexity(testStan.name, testStan.categories.name);
+    if (clearBriefingsError) console.error('Error clearing briefings:', clearBriefingsError);
+    if (clearDailyError) console.error('Error clearing daily_briefings:', clearDailyError);
 
+    console.log('✅ Cleared all old briefings');
+
+    console.log('📋 Step 2: Getting all active stans...');
+    
+    // Get all active stans
+    const { data: stans, error: stansError } = await supabase
+      .from('stans')
+      .select(`
+        *,
+        categories (
+          name,
+          icon,
+          color
+        )
+      `)
+      .eq('is_active', true)
+      .limit(20); // Limit to prevent timeout
+
+    if (stansError) throw stansError;
+
+    if (!stans || stans.length === 0) {
+      return NextResponse.json({
+        message: 'No active stans found',
+        count: 0
+      });
+    }
+
+    console.log(`🎯 Found ${stans.length} active stans to generate briefings for`);
+
+    const results = [];
+    const errors = [];
     const today = new Date().toISOString().split('T')[0];
-    const briefingData = {
-      stan_id: testStan.id,
-      user_id: testStan.user_id,
-      content: JSON.stringify(briefingContent),
-      search_sources: briefingContent.searchSources || [],
-      topics: briefingContent.topics,
-      images: briefingContent.images || [],
-      ai_generated: true,
-      date: today,
-      is_read: false,
-      created_at: new Date().toISOString(),
-    };
+
+    // Generate briefings for each stan using Perplexity
+    for (const stan of stans) {
+      try {
+        console.log(`🔥 Generating LIVE briefing for ${stan.name}...`);
+        
+        const briefingContent = await generateWithPerplexity(
+          stan.name, 
+          stan.categories.name
+        );
+
+        // Save to database
+        const { data: savedBriefing, error: saveError } = await supabase
+          .from('briefings')
+          .insert({
+            stan_id: stan.id,
+            user_id: stan.user_id || '00000000-0000-0000-0000-000000000000',
+            date: today,
+            content: JSON.stringify(briefingContent),
+            topics: briefingContent.topics,
+            search_sources: briefingContent.searchSources || [],
+            images: briefingContent.images || [],
+            ai_generated: true,
+            is_read: false,
+            created_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (saveError) throw saveError;
+
+        results.push({
+          stan: stan.name,
+          success: true,
+          topicCount: briefingContent.topics.length,
+          imageCount: briefingContent.images?.length || 0
+        });
+
+        console.log(`✅ Generated briefing for ${stan.name} with ${briefingContent.images?.length || 0} images`);
+
+        // Small delay to avoid rate limits
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+      } catch (error) {
+        console.error(`❌ Failed to generate for ${stan.name}:`, error);
+        errors.push({
+          stan: stan.name,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Perplexity API test completed',
-      briefingContent,
-      source: 'Perplexity API with real-time web search'
+      message: `Generated ${results.length} fresh briefings with Perplexity`,
+      results: results,
+      errors: errors,
+      totalStans: stans.length,
+      successCount: results.length,
+      errorCount: errors.length,
+      timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    return NextResponse.json({
-      error: 'Failed to test Perplexity API',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+    console.error('Error in regenerate-all-with-perplexity:', error);
+    return NextResponse.json(
+      { 
+        error: 'Failed to regenerate briefings',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
   }
 }

@@ -3,10 +3,16 @@ import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Initialize with service role to bypass RLS for server-side operations
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co",
-  process.env.SUPABASE_SERVICE_ROLE_KEY || "placeholder-key"
-);
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Missing Supabase environment variables');
+  }
+  
+  return createClient(supabaseUrl, supabaseKey);
+}
 
 // Verify service role key is configured
 if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -76,6 +82,7 @@ export async function GET(request: NextRequest) {
     console.log('📅 Looking for briefings on date:', today);
 
     // Get user's followed stan names (not IDs, because global stans are owned by system user)
+    const supabase = getSupabaseClient();
     const { data: userStans, error: stansError } = await supabase
       .from('stans')
       .select('name')
@@ -93,8 +100,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ briefings: [], message: 'No followed stans found for user' });
     }
 
-    // Get today's briefings for ANY stan (using the correct 'briefings' table)
-    const { data: allBriefings, error } = await supabase
+    // Try to get briefings from the 'briefings' table first (where seed-all-stans creates them)
+    let { data: allBriefings, error } = await supabase
       .from('briefings')
       .select(`
         *,
@@ -111,6 +118,32 @@ export async function GET(request: NextRequest) {
         )
       `)
       .order('created_at', { ascending: false });
+    
+    // If no briefings found in 'briefings' table, try 'daily_briefings' table
+    if (!allBriefings || allBriefings.length === 0) {
+      const dailyResult = await supabase
+        .from('daily_briefings')
+        .select(`
+          *,
+          stans (
+            id,
+            name,
+            description,
+            user_id,
+            categories (
+              name,
+              icon,
+              color
+            )
+          )
+        `)
+        .order('created_at', { ascending: false });
+      
+      if (dailyResult.data) {
+        allBriefings = dailyResult.data;
+        error = dailyResult.error;
+      }
+    }
     
     // Filter to only show briefings for stans the user follows
     const briefings = allBriefings?.filter(briefing => 
