@@ -14,10 +14,15 @@ function getSupabaseClient() {
 }
 
 // Initialize Gemini 2.5 Flash with Grounding
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || "placeholder-key");
-const model = genAI.getGenerativeModel({ 
-  model: "gemini-2.0-flash-exp"
-});
+function getGeminiModel() {
+  const apiKey = process.env.GOOGLE_AI_API_KEY;
+  if (!apiKey) {
+    throw new Error('GOOGLE_AI_API_KEY is not configured');
+  }
+  
+  const genAI = new GoogleGenerativeAI(apiKey);
+  return genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+}
 
 // Configure generation with Google Search
 const generationConfig = {
@@ -234,6 +239,7 @@ CRITICAL REQUIREMENTS:
     console.log('🌐 Using Gemini 2.5 Flash with Google Search Grounding for real-time information');
     
     // Use Gemini with Google Search Grounding for real web search results
+    const model = getGeminiModel();
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig
