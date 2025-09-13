@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { AppleMusicTheme, getGradientColors } from '../styles/AppleMusicTheme';
 // Import removed - using daily briefings API instead
 
 interface Stan {
@@ -82,6 +83,58 @@ interface HomeScreenProps {
 
 const { width: screenWidth } = Dimensions.get('window');
 
+// Function to generate short, engaging titles from topic data
+const generateShortTitle = (originalTitle: string, content: string): string => {
+  // Remove emojis from original title for processing
+  const cleanTitle = originalTitle.replace(/[^\w\s&]/g, '').trim();
+  
+  // Extract key phrases from content for dynamic titles
+  const contentWords = content.toLowerCase();
+  
+  // Create contextual short titles based on content
+  if (contentWords.includes('new') && (contentWords.includes('song') || contentWords.includes('music') || contentWords.includes('album'))) {
+    return 'New Music Drop';
+  } else if (contentWords.includes('performance') || contentWords.includes('concert') || contentWords.includes('show')) {
+    return 'Live Performance';
+  } else if (contentWords.includes('fashion') || contentWords.includes('outfit') || contentWords.includes('wearing')) {
+    return 'Fashion Moment';
+  } else if (contentWords.includes('award') || contentWords.includes('win') || contentWords.includes('achievement')) {
+    return 'Achievement Unlocked';
+  } else if (contentWords.includes('fan') && (contentWords.includes('crazy') || contentWords.includes('viral') || contentWords.includes('trending'))) {
+    return 'Fans Going Wild';
+  } else if (contentWords.includes('airport') || contentWords.includes('spotted') || contentWords.includes('sighting')) {
+    return 'Spotted Out & About';
+  } else if (contentWords.includes('behind') || contentWords.includes('backstage') || contentWords.includes('personal')) {
+    return 'Behind The Scenes';
+  } else if (contentWords.includes('collaboration') || contentWords.includes('collab') || contentWords.includes('featuring')) {
+    return 'Collaboration Alert';
+  } else if (contentWords.includes('upcoming') || contentWords.includes('soon') || contentWords.includes('teaser')) {
+    return 'Coming Soon';
+  } else if (contentWords.includes('instagram') || contentWords.includes('twitter') || contentWords.includes('social')) {
+    return 'Social Media Buzz';
+  } else if (contentWords.includes('breaking') || contentWords.includes('urgent') || contentWords.includes('just')) {
+    return 'Breaking News';
+  } else if (contentWords.includes('chart') || contentWords.includes('number') || contentWords.includes('million')) {
+    return 'Chart Success';
+  }
+  
+  // Fallback to simplified version of original title
+  const titleMap: { [key: string]: string } = {
+    'Breaking & Hot Right Now': 'Breaking News',
+    'Stan Twitter & Fan Reactions': 'Fan Reactions',
+    'Visual Content & Fashion Moments': 'Visual Update',
+    'Music, Performances & Studio Updates': 'Music Update',
+    'Video Content & Behind-the-Scenes': 'New Video',
+    'Records, Awards & Achievements': 'Achievement',
+    'Travel, Appearances & Sightings': 'Public Appearance',
+    'Collaborations & Industry News': 'Industry News',
+    'Personal Updates & Life Moments': 'Personal Update',
+    'Upcoming & Future Plans': 'Coming Soon'
+  };
+  
+  return titleMap[originalTitle] || cleanTitle.split(' ').slice(0, 2).join(' ') || 'Latest Update';
+};
+
 // Component to render scrollable images
 const ImageCarousel = ({ images }: { images: ImageData[] }) => {
   if (!images || images.length === 0) return null;
@@ -135,6 +188,29 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     }, [])
   );
 
+  // Handle refresh parameter from navigation
+  useEffect(() => {
+    if (navigation.getState) {
+      const route = navigation.getState()?.routes?.find(r => r.name === 'Home');
+      if (route?.params?.refresh) {
+        console.log('🔄 HomeScreen refresh triggered from navigation params');
+        loadStansAndGenerateBriefings();
+        // Clear the refresh parameter
+        navigation.setParams({ refresh: false });
+      }
+    }
+  }, [navigation]);
+
+  // Add listener for tab press to refresh
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('tabPress', (e) => {
+      console.log('🏠 Home tab pressed - refreshing data');
+      loadStansAndGenerateBriefings();
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
   const loadStansAndGenerateBriefings = async () => {
     setLoading(true);
     try {
@@ -142,8 +218,26 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       
       // Only fetch briefings if user is logged in
       let data;
+      let userFollowedStans: string[] = [];
       
       if (user?.id) {
+        // First, get the user's actual followed stans for double-check filtering
+        console.log(`👤 Fetching user's followed stans: ${user.id}`);
+        try {
+          const { data: followedStansData, error } = await supabase
+            .from('stans')
+            .select('name')
+            .eq('user_id', user.id)
+            .eq('is_active', true);
+          
+          if (!error && followedStansData) {
+            userFollowedStans = followedStansData.map(s => s.name);
+            console.log(`👤 User follows these stans:`, userFollowedStans);
+          }
+        } catch (error) {
+          console.error('Error fetching user stans:', error);
+        }
+        
         console.log(`🔍 Fetching briefings for user: ${user.id}`);
         const response = await fetch(`${backendUrl}/api/daily-briefings?userId=${user.id}`);
         
@@ -168,7 +262,16 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         throw new Error('User not authenticated');
       }
       
-      const dailyBriefings: DailyBriefing[] = data.briefings || [];
+      let dailyBriefings: DailyBriefing[] = data.briefings || [];
+      
+      // Additional client-side filtering to ensure only followed stans appear
+      if (userFollowedStans.length > 0) {
+        const beforeFilter = dailyBriefings.length;
+        dailyBriefings = dailyBriefings.filter(briefing => 
+          briefing.stans && userFollowedStans.includes(briefing.stans.name)
+        );
+        console.log(`🔧 Client-side filtering: ${beforeFilter} → ${dailyBriefings.length} briefings`);
+      }
       
       console.log(`📰 Loaded ${dailyBriefings.length} briefings for user`);
       
@@ -218,7 +321,8 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 }));
                 
                 setBriefingCards(cards);
-                setStans(retryBriefings.map(b => b.stans));
+                // Only show stans that actually have briefings (they should all be followed stans)
+                setStans(retryBriefings.map(b => b.stans).filter(stan => stan != null));
                 return;
               }
             }
@@ -227,8 +331,10 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           console.error('Failed to generate briefings:', genError);
         }
         
-        // If still no briefings, show placeholder
-        await checkForStansWithoutBriefings();
+        // If still no briefings, don't show any cards
+        console.log('ℹ️ No briefings available - not showing any cards');
+        setBriefingCards([]);
+        setStans([]);
         return;
       }
       
@@ -248,19 +354,23 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       }));
       
       setBriefingCards(cards);
-      setStans(dailyBriefings.map(b => b.stans));
+      // Only show stans that actually have briefings (they should all be followed stans)
+      setStans(dailyBriefings.map(b => b.stans).filter(stan => stan != null));
       
     } catch (error) {
       console.error('Error loading briefings:', error);
       Alert.alert('Error', 'Failed to load briefings');
-      // Fallback: try to load stans without briefings
-      await checkForStansWithoutBriefings();
+      // Fallback: clear cards if there's an error
+      setBriefingCards([]);
+      setStans([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
+  // Disabled: No longer showing cards without briefings
+  /*
   const checkForStansWithoutBriefings = async () => {
     try {
       console.log(`🔍 Checking user stans for user: ${user?.id}`);
@@ -341,11 +451,16 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       Alert.alert('Error', 'Failed to load your stans');
     }
   };
+  */
 
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    loadStansAndGenerateBriefings();
+    // Clear cache first
+    setBriefingCards([]);
+    setStans([]);
+    await loadStansAndGenerateBriefings();
+    setRefreshing(false);
   };
 
   const handleSignOut = async () => {
@@ -357,19 +472,8 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   };
 
   const renderBriefingCard = ({ item }: { item: BriefingCard }) => {
-    // Dynamic gradient colors based on category
-    const getCategoryGradient = (categoryName: string) => {
-      const gradients: Record<string, [string, string]> = {
-        'K-Pop': ['#667eea', '#764ba2'],
-        'Music': ['#f093fb', '#f5576c'], 
-        'Sports': ['#4facfe', '#00f2fe'],
-        'Gaming': ['#43e97b', '#38f9d7'],
-        'Movies & TV': ['#fa709a', '#fee140'],
-      };
-      return gradients[categoryName] || ['#667eea', '#764ba2'];
-    };
-
-    const gradient = getCategoryGradient(item.stan.categories.name);
+    // Use Apple Music themed gradients
+    const gradient = getGradientColors(item.stan.categories.name);
     
     if (item.loading) {
       return (
@@ -433,29 +537,48 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
               >
                 <View style={styles.cardMeta}>
                   <Text style={styles.sourceCount}>
-                    {topic.sources?.length || 0} SOURCES • {item.stan.name}
+                    {topic.sources?.length || 0} SOURCES
                   </Text>
                   <Text style={styles.timeAgo}>Now</Text>
                 </View>
-                <Text style={styles.topicTitle}>{topic.title}</Text>
+                <Text style={styles.artistName}>{item.stan.name}</Text>
+                <Text style={styles.topicTitle}>{generateShortTitle(topic.title, topic.content)}</Text>
                 <Text style={styles.topicContent}>{topic.content}</Text>
                 
-                {/* Image carousel for topic */}
-                <ImageCarousel images={topic.images || []} />
+                {/* Display images from sources */}
+                {topic.images && topic.images.length > 0 && (
+                  <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.imageScrollContainer}
+                  >
+                    {topic.images.map((image, imgIndex) => (
+                      <TouchableOpacity 
+                        key={imgIndex}
+                        onPress={() => image.source && Linking.openURL(image.source)}
+                        style={styles.imageContainer}
+                      >
+                        <Image 
+                          source={{ uri: image.thumbnail || image.url }}
+                          style={styles.sourceImage}
+                          resizeMode="cover"
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
                 
                 <View style={styles.cardActions}>
                   {topic.sources && topic.sources.length > 0 && (
                     <TouchableOpacity 
                       style={styles.viewSourcesButton}
                       onPress={() => {
-                        Alert.alert(
-                          'Sources',
-                          topic.sources?.map((source, i) => `${i + 1}. ${source}`).join('\n\n') || 'No sources available',
-                          [
-                            { text: 'Cancel' },
-                            { text: 'Open First Source', onPress: () => topic.sources?.[0] && Linking.openURL(topic.sources[0]) }
-                          ]
-                        );
+                        // Open the first source directly
+                        if (topic.sources && topic.sources[0]) {
+                          Linking.openURL(topic.sources[0]).catch(err => 
+                            Alert.alert('Error', 'Unable to open this link')
+                          );
+                        }
                       }}
                     >
                       <Text style={styles.actionButtonText}>View Sources</Text>
@@ -610,7 +733,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         renderItem={({ item }) => {
           if (item.topic) {
             // Render individual topic card
-            const gradient = getCategoryGradient(item.stan.categories.name);
+            const gradient = getGradientColors(item.stan.categories.name);
             return (
               <View style={styles.briefingCard}>
                 <LinearGradient
@@ -667,29 +790,18 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     </SafeAreaView>
   );
 
-  // Helper function for gradients
-  function getCategoryGradient(categoryName: string) {
-    const gradients: Record<string, [string, string]> = {
-      'K-Pop': ['#667eea', '#764ba2'],
-      'Music': ['#f093fb', '#f5576c'], 
-      'Sports': ['#4facfe', '#00f2fe'],
-      'Gaming': ['#43e97b', '#38f9d7'],
-      'Movies & TV': ['#fa709a', '#fee140'],
-    };
-    return gradients[categoryName] || ['#667eea', '#764ba2'];
-  }
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: AppleMusicTheme.colors.background,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: AppleMusicTheme.colors.background,
   },
   loadingLogoContainer: {
     flexDirection: 'row',
@@ -702,21 +814,21 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   loadingText: {
-    fontSize: 16,
-    color: '#666',
-    marginTop: 10,
+    ...AppleMusicTheme.typography.body,
+    color: AppleMusicTheme.colors.secondary,
+    marginTop: AppleMusicTheme.spacing.sm,
   },
   headerContainer: {
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    backgroundColor: AppleMusicTheme.colors.background,
+    borderBottomWidth: 0.33,
+    borderBottomColor: AppleMusicTheme.colors.separator,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingHorizontal: AppleMusicTheme.spacing.screenPadding,
+    paddingVertical: AppleMusicTheme.spacing.md,
   },
   headerLeft: {
     flex: 1,
@@ -748,23 +860,23 @@ const styles = StyleSheet.create({
     color: '#000',
   },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginBottom: 5,
+    ...AppleMusicTheme.typography.largeTitle,
+    color: AppleMusicTheme.colors.primary,
+    marginBottom: AppleMusicTheme.spacing.xs,
   },
   welcome: {
-    fontSize: 16,
-    color: '#666',
+    ...AppleMusicTheme.typography.subheadline,
+    color: AppleMusicTheme.colors.secondary,
   },
   signOutButton: {
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    backgroundColor: AppleMusicTheme.colors.surfaceSecondary,
+    borderRadius: AppleMusicTheme.borderRadius.button,
+    paddingHorizontal: AppleMusicTheme.spacing.sm,
+    paddingVertical: AppleMusicTheme.spacing.xs,
   },
   signOutText: {
-    color: '#666',
-    fontSize: 14,
+    ...AppleMusicTheme.typography.footnote,
+    color: AppleMusicTheme.colors.secondary,
     fontWeight: '500',
   },
   content: {
@@ -801,18 +913,14 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   briefingCard: {
-    borderRadius: 16,
-    marginHorizontal: 20,
-    marginBottom: 20,
+    borderRadius: AppleMusicTheme.borderRadius.card,
+    marginHorizontal: AppleMusicTheme.spacing.screenPadding,
+    marginBottom: AppleMusicTheme.spacing.screenPadding,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
+    ...AppleMusicTheme.shadows.card,
   },
   cardGradient: {
-    padding: 20,
+    padding: AppleMusicTheme.spacing.screenPadding,
     minHeight: 180,
     justifyContent: 'flex-end',
   },
@@ -820,10 +928,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: AppleMusicTheme.spacing.sm,
   },
   sourceCount: {
-    fontSize: 12,
+    ...AppleMusicTheme.typography.caption,
     color: '#ffffff',
     opacity: 0.8,
     textTransform: 'uppercase',
@@ -831,24 +939,34 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   timeAgo: {
-    fontSize: 12,
+    ...AppleMusicTheme.typography.caption,
     color: '#ffffff',
     opacity: 0.8,
   },
-  topicTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+  artistName: {
+    ...AppleMusicTheme.typography.title2,
+    fontWeight: '800',
     color: '#ffffff',
-    marginBottom: 8,
+    marginBottom: AppleMusicTheme.spacing.xs,
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+    letterSpacing: 0.5,
+  },
+  topicTitle: {
+    ...AppleMusicTheme.typography.callout,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.9)',
+    marginBottom: AppleMusicTheme.spacing.sm,
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
   },
   topicContent: {
-    fontSize: 15,
+    ...AppleMusicTheme.typography.subheadline,
     color: '#ffffff',
     lineHeight: 22,
-    marginBottom: 16,
+    marginBottom: AppleMusicTheme.spacing.md,
     opacity: 0.95,
     textShadowColor: 'rgba(0,0,0,0.3)',
     textShadowOffset: { width: 1, height: 1 },
@@ -861,24 +979,39 @@ const styles = StyleSheet.create({
   },
   viewSourcesButton: {
     backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    borderRadius: AppleMusicTheme.borderRadius.button,
+    paddingHorizontal: AppleMusicTheme.spacing.md,
+    paddingVertical: AppleMusicTheme.spacing.sm,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
   },
   retryButton: {
     backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    borderRadius: AppleMusicTheme.borderRadius.button,
+    paddingHorizontal: AppleMusicTheme.spacing.md,
+    paddingVertical: AppleMusicTheme.spacing.sm,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
   },
   actionButtonText: {
+    ...AppleMusicTheme.typography.footnote,
     color: '#ffffff',
-    fontSize: 13,
     fontWeight: '600',
+  },
+  imageScrollContainer: {
+    marginVertical: AppleMusicTheme.spacing.sm,
+    height: 120,
+  },
+  imageContainer: {
+    marginRight: AppleMusicTheme.spacing.sm,
+    borderRadius: AppleMusicTheme.borderRadius.image,
+    overflow: 'hidden',
+  },
+  sourceImage: {
+    width: 160,
+    height: 100,
+    borderRadius: AppleMusicTheme.borderRadius.image,
+    backgroundColor: AppleMusicTheme.colors.surfaceSecondary,
   },
   moreButton: {
     backgroundColor: 'rgba(255,255,255,0.2)',
@@ -977,30 +1110,30 @@ const styles = StyleSheet.create({
   },
   emptyStateIcon: {
     fontSize: 64,
-    marginBottom: 20,
+    marginBottom: AppleMusicTheme.spacing.screenPadding,
   },
   emptyStateTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 12,
+    ...AppleMusicTheme.typography.title2,
+    color: AppleMusicTheme.colors.primary,
+    marginBottom: AppleMusicTheme.spacing.sm,
     textAlign: 'center',
   },
   emptyStateText: {
-    fontSize: 16,
-    color: '#666',
+    ...AppleMusicTheme.typography.body,
+    color: AppleMusicTheme.colors.secondary,
     textAlign: 'center',
     lineHeight: 24,
-    marginBottom: 30,
+    marginBottom: AppleMusicTheme.spacing.xxl,
   },
   addFirstStanButton: {
-    backgroundColor: '#000',
-    borderRadius: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    backgroundColor: AppleMusicTheme.colors.accent,
+    borderRadius: AppleMusicTheme.borderRadius.button,
+    paddingHorizontal: AppleMusicTheme.spacing.lg,
+    paddingVertical: AppleMusicTheme.spacing.md,
   },
   addFirstStanButtonText: {
-    color: '#fff',
-    fontSize: 16,
+    ...AppleMusicTheme.typography.callout,
+    color: '#ffffff',
     fontWeight: '600',
   },
   suggestionCard: {
@@ -1081,14 +1214,14 @@ const styles = StyleSheet.create({
   briefingImage: {
     width: 120,
     height: 80,
-    borderRadius: 8,
+    borderRadius: AppleMusicTheme.borderRadius.image,
   },
   stanStoriesSection: {
-    paddingVertical: 16,
-    paddingLeft: 24,
+    paddingVertical: AppleMusicTheme.spacing.md,
+    paddingLeft: AppleMusicTheme.spacing.screenPadding,
   },
   stanStoriesContent: {
-    paddingRight: 24,
+    paddingRight: AppleMusicTheme.spacing.screenPadding,
   },
   stanStory: {
     alignItems: 'center',
@@ -1100,21 +1233,17 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: AppleMusicTheme.spacing.sm,
     borderWidth: 2,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderColor: AppleMusicTheme.colors.primary,
+    ...AppleMusicTheme.shadows.small,
   },
   stanStoryIcon: {
     fontSize: 24,
   },
   stanStoryName: {
-    fontSize: 12,
-    color: '#666',
+    ...AppleMusicTheme.typography.caption,
+    color: AppleMusicTheme.colors.secondary,
     textAlign: 'center',
     fontWeight: '500',
   },

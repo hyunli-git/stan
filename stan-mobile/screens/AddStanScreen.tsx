@@ -9,10 +9,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   FlatList,
+  ScrollView,
   SafeAreaView,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { AppleMusicTheme } from '../styles/AppleMusicTheme';
 
 interface Category {
   id: string;
@@ -101,6 +103,8 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredSuggestions, setFilteredSuggestions] = useState<StanSuggestion[]>([]);
   const [selectedStans, setSelectedStans] = useState<string[]>([]);
+  const [showSnackbar, setShowSnackbar] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
   const { user } = useAuth();
 
   // Debug navigation
@@ -111,6 +115,7 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
 
   useEffect(() => {
     loadCategories();
+    loadUserFollowedStans();
     // Show popular suggestions by default
     setFilteredSuggestions(SEARCH_DATABASE.slice(0, 20));
   }, []);
@@ -158,6 +163,38 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
       console.error('Error loading categories:', error);
     } finally {
       setLoadingCategories(false);
+    }
+  };
+
+  const loadUserFollowedStans = async () => {
+    if (!user?.id) return;
+    
+    try {
+      console.log('🔍 Loading user followed stans...');
+      const { data, error } = await supabase
+        .from('stans')
+        .select('name')
+        .eq('user_id', user.id)
+        .eq('is_active', true);
+
+      if (error) throw error;
+      
+      const followedStanNames = data?.map(stan => stan.name) || [];
+      console.log('👤 User follows:', followedStanNames);
+      
+      // Mark already followed stans as selected
+      const preSelectedIds: string[] = [];
+      SEARCH_DATABASE.forEach(suggestion => {
+        if (followedStanNames.includes(suggestion.name)) {
+          preSelectedIds.push(suggestion.id);
+        }
+      });
+      
+      console.log('✅ Pre-selecting stans:', preSelectedIds);
+      setSelectedStans(preSelectedIds);
+      
+    } catch (error) {
+      console.error('Error loading user stans:', error);
     }
   };
 
@@ -218,20 +255,59 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
       return;
     }
     
-    if (selectedStans.length > 0) {
-      // Bulk add selected stans
-      const selectedSuggestions = SEARCH_DATABASE.filter(s => selectedStans.includes(s.id));
-      console.log('📋 Selected suggestions:', selectedSuggestions.map(s => s.name));
-      
-      if (selectedSuggestions.length === 0) {
-        Alert.alert('Error', 'Please select at least one stan to follow');
-        return;
-      }
+    // Get currently followed stans
+    const { data: currentStans } = await supabase
+      .from('stans')
+      .select('id, name')
+      .eq('user_id', user?.id)
+      .eq('is_active', true);
+    
+    const currentStanNames = currentStans?.map(s => s.name) || [];
+    const currentStanIds = currentStans?.map(s => s.id) || [];
+    
+    // Determine what to add and what to remove
+    const selectedSuggestions = SEARCH_DATABASE.filter(s => selectedStans.includes(s.id));
+    const selectedStanNames = selectedSuggestions.map(s => s.name);
+    
+    const newStansToAdd = selectedSuggestions.filter(s => !currentStanNames.includes(s.name));
+    const stansToRemove = currentStans?.filter(s => !selectedStanNames.includes(s.name)) || [];
+    
+    console.log('📋 Selected suggestions:', selectedStanNames);
+    console.log('📋 Currently following:', currentStanNames);
+    console.log('📋 New stans to add:', newStansToAdd.map(s => s.name));
+    console.log('📋 Stans to remove:', stansToRemove.map(s => s.name));
+    
+    if (newStansToAdd.length === 0 && stansToRemove.length === 0) {
+      Alert.alert('Info', 'No changes to make - selection matches your current following list!');
+      return;
+    }
 
-      setLoading(true);
-      try {
-        // Find or create categories for the selected stans
-        const stansToAdd = await Promise.all(selectedSuggestions.map(async (suggestion) => {
+    setLoading(true);
+    try {
+      let addedCount = 0;
+      let removedCount = 0;
+      
+      // Remove unfollowed stans
+      if (stansToRemove.length > 0) {
+        console.log('🗑️ Removing unfollowed stans:', stansToRemove.map(s => s.name));
+        const { error: removeError } = await supabase
+          .from('stans')
+          .delete()
+          .in('id', stansToRemove.map(s => s.id));
+          
+        if (removeError) {
+          console.error('❌ Error removing stans:', removeError);
+          throw removeError;
+        }
+        
+        removedCount = stansToRemove.length;
+        console.log('✅ Successfully removed', removedCount, 'stans');
+      }
+      
+      // Add new stans
+      if (newStansToAdd.length > 0) {
+        // Find or create categories for the new stans to add
+        const stansToAdd = await Promise.all(newStansToAdd.map(async (suggestion) => {
           // Try to find existing category by name
           let categoryId = suggestion.categoryId;
           
@@ -282,49 +358,58 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
           throw error;
         }
 
-        const addedCount = data?.length || selectedSuggestions.length;
+        addedCount = data?.length || newStansToAdd.length;
         console.log('✅ Successfully added stans:', addedCount);
-        
-        // Clear selections
-        console.log('🧹 Clearing selections and search');
-        setSelectedStans([]);
-        setSearchQuery('');
-        
-        // Navigate to Home tab instead of goBack since AddStan is a tab
-        console.log('🔄 Attempting navigation to Home tab');
-        try {
-          navigation.navigate('Home');
-          console.log('✅ Navigation to Home successful');
-        } catch (navError) {
-          console.log('❌ Navigation failed, trying goBack:', navError);
-          navigation.goBack();
-        }
-        
-        // Show quick success message (optional - remove if you don't want any message)
-        setTimeout(() => {
-          Alert.alert(
-            'Success! 🎉',
-            `You're now following ${addedCount} new ${addedCount === 1 ? 'stan' : 'stans'}!`
-          );
-        }, 100);
-      } catch (error: any) {
-        console.error('❌ Error in handleAddStans:', error);
-        console.error('❌ Error stack:', error.stack);
-        
-        let errorMessage = error.message || 'Failed to add stans';
-        if (errorMessage.includes('duplicate')) {
-          errorMessage = 'Some of these stans are already in your list!';
-        }
-        
-        Alert.alert('Error', errorMessage);
-        console.log('🚫 Error alert shown, not navigating');
-      } finally {
-        console.log('🏁 Finally block - setting loading to false');
-        setLoading(false);
       }
-    } else {
-      console.log('❌ No stans selected - showing error alert');
-      Alert.alert('Error', 'Please select at least one stan to follow');
+      
+      console.log('✅ Changes completed - Added:', addedCount, 'Removed:', removedCount);
+      
+      // Keep current selections as they now reflect the updated following list
+      console.log('🧹 Clearing search query only');
+      setSearchQuery('');
+      
+      // Reload user stans to update the selection display
+      await loadUserFollowedStans();
+      
+      // Show snackbar notification
+      setSnackbarMessage('Your stans updated');
+      setShowSnackbar(true);
+      
+      // Auto-hide snackbar and redirect after 2 seconds
+      setTimeout(() => {
+        setShowSnackbar(false);
+        // Attempt navigation to Home after snackbar
+        try {
+          const parent = navigation.getParent();
+          if (parent && parent.navigate) {
+            parent.navigate('Home');
+          } else if (navigation.jumpTo) {
+            navigation.jumpTo('Home');
+          } else {
+            navigation.navigate('MainTabs', { 
+              screen: 'Home',
+              params: { refresh: true }
+            });
+          }
+          console.log('✅ Post-snackbar navigation to Home initiated');
+        } catch (navError) {
+          console.log('❌ Post-snackbar navigation failed:', navError);
+        }
+      }, 2000);
+    } catch (error: any) {
+      console.error('❌ Error in handleAddStans:', error);
+      console.error('❌ Error stack:', error.stack);
+      
+      let errorMessage = error.message || 'Failed to update stans';
+      if (errorMessage.includes('duplicate')) {
+        errorMessage = 'Some of these stans are already in your list!';
+      }
+      
+      Alert.alert('Error', errorMessage);
+      console.log('🚫 Error alert shown, not navigating');
+    } finally {
+      console.log('🏁 Finally block - setting loading to false');
+      setLoading(false);
     }
   };
 
@@ -363,19 +448,18 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
         onPress={handlePress}
         activeOpacity={0.7}
       >
-        <View style={styles.suggestionHeader}>
-          <View style={styles.suggestionInfo}>
-            <Text style={styles.suggestionIcon}>{item.categoryIcon}</Text>
-            <View style={styles.suggestionText}>
-              <Text style={styles.suggestionName}>{item.name}</Text>
-              <Text style={styles.suggestionCategory}>{item.category}</Text>
-            </View>
+        <View style={styles.suggestionInfo}>
+          <View style={[styles.suggestionIcon, { backgroundColor: item.categoryColor + '15' }]}>
+            <Text style={styles.suggestionIconText}>{item.categoryIcon}</Text>
           </View>
-          <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-            {isSelected && <Text style={styles.checkmark}>✓</Text>}
+          <View style={styles.suggestionText}>
+            <Text style={styles.suggestionName}>{item.name}</Text>
+            <Text style={styles.suggestionCategory}>{item.category}</Text>
           </View>
         </View>
-        <Text style={styles.suggestionDescription}>{item.description}</Text>
+        <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+          {isSelected && <Text style={styles.checkmark}>✓</Text>}
+        </View>
       </TouchableOpacity>
     );
   };
@@ -410,19 +494,29 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
           </Text>
         </View>
 
-        {/* TEST BUTTON */}
-        <View style={{ padding: 20 }}>
+        {/* DEBUG INFO AND TEST BUTTON */}
+        <View style={{ padding: 20, backgroundColor: '#ffebee' }}>
+          <Text style={{ fontSize: 14, marginBottom: 10, color: '#333' }}>
+            DEBUG: filteredSuggestions.length = {filteredSuggestions.length}
+          </Text>
+          <Text style={{ fontSize: 14, marginBottom: 10, color: '#333' }}>
+            DEBUG: selectedStans.length = {selectedStans.length}
+          </Text>
+          <Text style={{ fontSize: 14, marginBottom: 10, color: '#333' }}>
+            DEBUG: loadingCategories = {loadingCategories.toString()}
+          </Text>
           <TouchableOpacity
             style={{
               backgroundColor: 'red',
               padding: 20,
               borderRadius: 10,
               alignItems: 'center',
+              marginTop: 10,
             }}
-            onPress={() => Alert.alert('TOP TEST BUTTON WORKS!')}
+            onPress={() => Alert.alert('TOP TEST BUTTON WORKS!', `Suggestions: ${filteredSuggestions.length}, Selected: ${selectedStans.length}`)}
           >
             <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>
-              🔴 TOP TEST BUTTON
+              🔴 RED TEST BUTTON - TAP ME!
             </Text>
           </TouchableOpacity>
         </View>
@@ -441,8 +535,7 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
         </View>
 
         {/* Search Results */}
-        {filteredSuggestions.length > 0 && (
-          <View style={styles.suggestionsSection}>
+        <View style={styles.suggestionsSection}>
             {/* Debug Info */}
             <View style={styles.debugInfo}>
               <Text style={styles.debugText}>
@@ -480,20 +573,41 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
               </View>
             )}
 
-            <FlatList
-              data={filteredSuggestions}
-              renderItem={renderSuggestion}
-              keyExtractor={(item) => String(item.id)}
-              style={styles.suggestionsList}
-              showsVerticalScrollIndicator={true}
-              keyboardShouldPersistTaps="handled"
-              removeClippedSubviews={false}
-              initialNumToRender={8}
-              maxToRenderPerBatch={5}
-              windowSize={10}
-              extraData={selectedStans.length}
-              ListFooterComponent={() => <View style={{ height: 20 }} />}
-            />
+            {/* SUPER SIMPLE TEST SELECTION */}
+            <View style={{ padding: 10, backgroundColor: '#ffffcc', marginBottom: 10 }}>
+              <TouchableOpacity
+                style={{ backgroundColor: '#ff9800', padding: 15, borderRadius: 8, marginBottom: 10 }}
+                onPress={() => {
+                  console.log('🧪 TEST: Adding BTS to selection');
+                  setSelectedStans(current => [...current, '1']);
+                }}
+              >
+                <Text style={{ color: 'white', fontWeight: 'bold', textAlign: 'center' }}>
+                  🧪 TEST: Add BTS to selection
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={{ backgroundColor: '#f44336', padding: 15, borderRadius: 8 }}
+                onPress={() => {
+                  console.log('🧪 TEST: Clearing selection');
+                  setSelectedStans([]);
+                }}
+              >
+                <Text style={{ color: 'white', fontWeight: 'bold', textAlign: 'center' }}>
+                  🧪 TEST: Clear selection
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.suggestionsList} showsVerticalScrollIndicator={true}>
+              {filteredSuggestions.map((item) => (
+                <View key={item.id}>
+                  {renderSuggestion({ item })}
+                </View>
+              ))}
+              <View style={{ height: 20 }} />
+            </ScrollView>
             
             {/* Fixed Bottom Add Button */}
             <View style={styles.fixedBottomButton}>
@@ -502,18 +616,47 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
                 onPress={() => {
                   console.log('🚀 BUTTON PRESSED! Starting handleAddStans...');
                   Alert.alert('BUTTON WORKS!', `Selected: ${selectedStans.length} stans`);
-                  // handleAddStans();
+                  handleAddStans();
                 }}
                 disabled={false}
                 activeOpacity={0.8}
               >
                 <Text style={styles.bulkAddButtonText}>
-                  🚀 TEST BUTTON - TAP ME!
+                  {selectedStans.length > 0 
+                    ? `Start Following (${selectedStans.length})` 
+                    : 'Select stans to follow'
+                  }
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
-        ) : null}
+
+        {/* ALWAYS VISIBLE BLUE TEST BUTTON */}
+        <View style={{ position: 'absolute', bottom: 100, left: 20, right: 20, backgroundColor: '#e3f2fd', padding: 10, borderRadius: 10 }}>
+          <TouchableOpacity
+            style={{
+              backgroundColor: 'blue',
+              padding: 20,
+              borderRadius: 10,
+              alignItems: 'center',
+            }}
+            onPress={() => {
+              Alert.alert('BLUE BUTTON WORKS!', `Suggestions: ${filteredSuggestions.length}, Selected: ${selectedStans.length}`);
+              handleAddStans();
+            }}
+          >
+            <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>
+              🔵 BLUE TEST + HANDLEADDSTANS
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Snackbar Notification */}
+        {showSnackbar && (
+          <View style={styles.snackbar}>
+            <Text style={styles.snackbarText}>{snackbarMessage}</Text>
+          </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -522,7 +665,7 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: AppleMusicTheme.colors.background,
   },
   keyboardContainer: {
     flex: 1,
@@ -531,89 +674,87 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: AppleMusicTheme.colors.background,
   },
   loadingText: {
-    fontSize: 16,
-    color: '#666',
-    marginTop: 10,
+    ...AppleMusicTheme.typography.body,
+    color: AppleMusicTheme.colors.secondary,
+    marginTop: AppleMusicTheme.spacing.sm,
   },
   header: {
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    backgroundColor: '#ffffff',
+    paddingHorizontal: AppleMusicTheme.spacing.screenPadding,
+    paddingVertical: AppleMusicTheme.spacing.screenPadding,
+    borderBottomWidth: 0.33,
+    borderBottomColor: AppleMusicTheme.colors.separator,
+    backgroundColor: AppleMusicTheme.colors.background,
   },
   backButton: {
     marginBottom: 16,
     paddingVertical: 8,
   },
   backButtonText: {
-    fontSize: 16,
-    color: '#007AFF',
+    ...AppleMusicTheme.typography.callout,
+    color: AppleMusicTheme.colors.blue,
     fontWeight: '500',
   },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#000',
-    marginBottom: 8,
+    ...AppleMusicTheme.typography.title1,
+    color: AppleMusicTheme.colors.primary,
+    marginBottom: AppleMusicTheme.spacing.sm,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#666',
+    ...AppleMusicTheme.typography.body,
+    color: AppleMusicTheme.colors.secondary,
     lineHeight: 22,
   },
   searchSection: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: '#ffffff',
+    paddingHorizontal: AppleMusicTheme.spacing.screenPadding,
+    paddingVertical: AppleMusicTheme.spacing.md,
+    backgroundColor: AppleMusicTheme.colors.background,
   },
   label: {
-    fontSize: 16,
+    ...AppleMusicTheme.typography.callout,
     fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
+    color: AppleMusicTheme.colors.primary,
+    marginBottom: AppleMusicTheme.spacing.sm,
   },
   searchInput: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    backgroundColor: '#f9f9f9',
-    color: '#000',
+    borderWidth: 0,
+    borderRadius: AppleMusicTheme.borderRadius.md,
+    padding: AppleMusicTheme.spacing.md,
+    ...AppleMusicTheme.typography.callout,
+    backgroundColor: AppleMusicTheme.colors.surface,
+    color: AppleMusicTheme.colors.primary,
   },
   suggestionsSection: {
     flex: 1,
-    paddingHorizontal: 24,
+    backgroundColor: AppleMusicTheme.colors.background,
+    marginTop: AppleMusicTheme.spacing.sm,
+    borderRadius: AppleMusicTheme.borderRadius.md,
+    marginHorizontal: AppleMusicTheme.spacing.md,
+    overflow: 'hidden',
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
+    ...AppleMusicTheme.typography.headline,
+    color: AppleMusicTheme.colors.primary,
+    marginBottom: AppleMusicTheme.spacing.sm,
   },
   suggestionsList: {
     flex: 1,
   },
   suggestionCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 8,
-    borderLeftWidth: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    backgroundColor: AppleMusicTheme.colors.background,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: AppleMusicTheme.spacing.listItemPadding,
+    paddingHorizontal: AppleMusicTheme.spacing.screenPadding,
+    borderBottomWidth: 0.33,
+    borderBottomColor: AppleMusicTheme.colors.separator,
   },
   suggestionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    flex: 1,
   },
   suggestionInfo: {
     flexDirection: 'row',
@@ -621,28 +762,33 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   suggestionIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: AppleMusicTheme.colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: AppleMusicTheme.spacing.listItemPadding,
+  },
+  suggestionIconText: {
     fontSize: 22,
-    marginRight: 12,
   },
   suggestionText: {
     flex: 1,
   },
   suggestionName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-    marginBottom: 2,
+    ...AppleMusicTheme.typography.callout,
+    fontWeight: '500',
+    color: AppleMusicTheme.colors.primary,
+    marginBottom: 3,
   },
   suggestionCategory: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
+    ...AppleMusicTheme.typography.footnote,
+    color: AppleMusicTheme.colors.secondary,
+    fontWeight: '400',
   },
   suggestionDescription: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 18,
-    marginLeft: 34,
+    display: 'none', // Hide for cleaner look
   },
   formSection: {
     flex: 1,
@@ -728,43 +874,43 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   controlButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: '#f0f0f0',
+    paddingHorizontal: AppleMusicTheme.spacing.sm,
+    paddingVertical: AppleMusicTheme.spacing.xs,
+    borderRadius: AppleMusicTheme.borderRadius.xs,
+    backgroundColor: AppleMusicTheme.colors.surfaceSecondary,
   },
   controlButtonText: {
-    fontSize: 12,
-    color: '#666',
+    ...AppleMusicTheme.typography.caption,
+    color: AppleMusicTheme.colors.secondary,
     fontWeight: '500',
   },
   selectedCounter: {
-    backgroundColor: '#e8f4fd',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    backgroundColor: AppleMusicTheme.colors.surface,
+    paddingHorizontal: AppleMusicTheme.spacing.sm,
+    paddingVertical: AppleMusicTheme.spacing.xs,
+    borderRadius: AppleMusicTheme.borderRadius.xs,
     alignSelf: 'flex-start',
-    marginBottom: 12,
+    marginBottom: AppleMusicTheme.spacing.sm,
   },
   selectedCounterText: {
-    fontSize: 12,
-    color: '#1976d2',
+    ...AppleMusicTheme.typography.caption,
+    color: AppleMusicTheme.colors.accent,
     fontWeight: '600',
   },
   checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#ddd',
-    backgroundColor: '#fff',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: AppleMusicTheme.colors.secondary,
+    backgroundColor: AppleMusicTheme.colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
+    marginLeft: AppleMusicTheme.spacing.sm,
   },
   checkboxSelected: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
+    backgroundColor: AppleMusicTheme.colors.accent,
+    borderColor: AppleMusicTheme.colors.accent,
   },
   checkmark: {
     color: '#fff',
@@ -772,26 +918,26 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   suggestionCardSelected: {
-    backgroundColor: '#f0f8ff',
+    backgroundColor: AppleMusicTheme.colors.surface,
     borderLeftWidth: 4,
-    borderLeftColor: '#007AFF',
+    borderLeftColor: AppleMusicTheme.colors.accent,
   },
   fixedBottomButton: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    backgroundColor: AppleMusicTheme.colors.background,
+    paddingHorizontal: AppleMusicTheme.spacing.screenPadding,
+    paddingVertical: AppleMusicTheme.spacing.sm,
+    borderTopWidth: 0.33,
+    borderTopColor: AppleMusicTheme.colors.separator,
   },
   bulkAddButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: AppleMusicTheme.colors.accent,
+    borderRadius: AppleMusicTheme.borderRadius.button,
+    padding: AppleMusicTheme.spacing.md,
     alignItems: 'center',
   },
   bulkAddButtonText: {
-    color: '#fff',
-    fontSize: 16,
+    ...AppleMusicTheme.typography.callout,
+    color: '#ffffff',
     fontWeight: '600',
   },
   // Debug styles
@@ -807,5 +953,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#856404',
     fontFamily: 'monospace',
+  },
+  // Snackbar styles
+  snackbar: {
+    position: 'absolute',
+    bottom: 120,
+    left: 20,
+    right: 20,
+    backgroundColor: '#323232',
+    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    zIndex: 1000,
+  },
+  snackbarText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
   },
 });

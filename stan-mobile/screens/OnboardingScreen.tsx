@@ -7,9 +7,11 @@ import {
   ScrollView,
   FlatList,
   Alert,
+  SafeAreaView,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { AppleMusicTheme } from '../styles/AppleMusicTheme';
 
 interface StanSuggestion {
   id: string;
@@ -56,6 +58,10 @@ export default function OnboardingScreen({ navigation }: OnboardingScreenProps) 
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
   const { user, markOnboardingComplete } = useAuth();
+
+  // Debug logging
+  console.log('🚀 OnboardingScreen loaded');
+  console.log('🚀 STAN_SUGGESTIONS count:', STAN_SUGGESTIONS.length);
 
   useEffect(() => {
     loadCategories();
@@ -121,11 +127,44 @@ export default function OnboardingScreen({ navigation }: OnboardingScreenProps) 
         is_active: true,
       }));
 
-      const { error } = await supabase
+      const { data: insertedStans, error } = await supabase
         .from('stans')
-        .insert(stansToInsert);
+        .insert(stansToInsert)
+        .select();
 
       if (error) throw error;
+
+      // Generate initial briefings for the new stans
+      if (insertedStans && insertedStans.length > 0) {
+        try {
+          console.log('🎯 Generating initial briefings for new stans...');
+          const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://stan-peach.vercel.app';
+          
+          // Generate briefings for each new stan
+          await Promise.all(insertedStans.map(async (stan) => {
+            try {
+              const response = await fetch(`${backendUrl}/api/generate-briefing`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  stanId: stan.id,
+                  stanName: stan.name,
+                  userId: user?.id 
+                })
+              });
+              
+              if (response.ok) {
+                console.log(`✅ Generated briefing for ${stan.name}`);
+              }
+            } catch (err) {
+              console.error(`Failed to generate briefing for ${stan.name}:`, err);
+            }
+          }));
+        } catch (error) {
+          console.error('Error generating initial briefings:', error);
+          // Don't block navigation if briefing generation fails
+        }
+      }
 
       // Mark onboarding as complete
       markOnboardingComplete();
@@ -199,94 +238,102 @@ export default function OnboardingScreen({ navigation }: OnboardingScreenProps) 
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>🌟 Welcome to STAN!</Text>
-        <Text style={styles.subtitle}>
-          Pick the artists, teams, and creators you want to follow.
-          We'll give you daily AI briefings about what they're up to.
-        </Text>
-        {selectedStans.length > 0 && (
-          <View style={styles.selectionBadge}>
-            <Text style={styles.selectionText}>
-              {selectedStans.length} selected
-            </Text>
-          </View>
-        )}
-      </View>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          <Text style={styles.title}>🌟 Welcome to STAN!</Text>
+          <Text style={styles.subtitle}>
+            Pick the artists, teams, and creators you want to follow.
+            We'll give you daily AI briefings about what they're up to.
+          </Text>
+          {selectedStans.length > 0 && (
+            <View style={styles.selectionBadge}>
+              <Text style={styles.selectionText}>
+                {selectedStans.length} selected
+              </Text>
+            </View>
+          )}
+        </View>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {STAN_SUGGESTIONS.map((item, index) => {
-          const selected = isSelected(item);
-          
-          return (
-            <TouchableOpacity
-              key={item.id}
-              style={[
-                styles.suggestionCard,
-                { borderLeftColor: item.categoryColor },
-                selected && { 
-                  backgroundColor: item.categoryColor + '20',
-                  borderWidth: 2,
-                  borderColor: item.categoryColor,
-                }
-              ]}
-              onPress={() => toggleSelection(item)}
-            >
-              <View style={styles.cardHeader}>
-                <View style={styles.cardInfo}>
-                  <Text style={styles.categoryIcon}>{item.categoryIcon}</Text>
-                  <View style={styles.cardText}>
-                    <Text style={[styles.stanName, selected && { fontWeight: '700' }]}>
-                      {item.name}
+        <FlatList
+          style={styles.flatList}
+          contentContainerStyle={styles.flatListContent}
+          data={STAN_SUGGESTIONS}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={true}
+          renderItem={({ item }) => {
+            const selected = isSelected(item);
+            return (
+              <TouchableOpacity
+                style={[
+                  styles.suggestionCard,
+                  { borderLeftColor: item.categoryColor },
+                  selected && { 
+                    backgroundColor: item.categoryColor + '20',
+                    borderWidth: 2,
+                    borderColor: item.categoryColor,
+                  }
+                ]}
+                onPress={() => toggleSelection(item)}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardInfo}>
+                    <Text style={styles.categoryIcon}>{item.categoryIcon || '⭐'}</Text>
+                    <View style={styles.cardText}>
+                      <Text style={[styles.stanName, selected && { fontWeight: '700' }]}>
+                        {item.name}
+                      </Text>
+                      <Text style={styles.stanCategory}>{item.category}</Text>
+                    </View>
+                  </View>
+                  <View style={[
+                    styles.selectButton, 
+                    selected && { backgroundColor: item.categoryColor }
+                  ]}>
+                    <Text style={[
+                      styles.selectButtonText,
+                      selected && { color: '#fff' }
+                    ]}>
+                      {selected ? '✓' : '+'}
                     </Text>
-                    <Text style={styles.stanCategory}>{item.category}</Text>
                   </View>
                 </View>
-                <View style={[
-                  styles.selectButton, 
-                  selected && { backgroundColor: item.categoryColor }
-                ]}>
-                  <Text style={[
-                    styles.selectButtonText,
-                    selected && { color: '#fff' }
-                  ]}>
-                    {selected ? '✓' : '+'}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.stanDescription}>{item.description}</Text>
-            </TouchableOpacity>
-          );
-        })}
-        
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={styles.skipButton}
-            onPress={() => navigation.navigate('MainTabs', { screen: 'AddStan' })}
-          >
-            <Text style={styles.skipText}>Add something else</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+                <Text style={styles.stanDescription}>{item.description}</Text>
+              </TouchableOpacity>
+            );
+          }}
+          ListFooterComponent={() => (
+            <View style={styles.footer}>
+              <TouchableOpacity
+                style={styles.skipButton}
+                onPress={() => navigation.navigate('MainTabs', { screen: 'AddStan' })}
+              >
+                <Text style={styles.skipText}>Add something else</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        />
 
-      {/* Always show bottom bar for debugging */}
-      <View style={[styles.bottomBar, selectedStans.length === 0 && { backgroundColor: 'red' }]}>
-        {selectedStans.length > 0 ? (
-          <TouchableOpacity
-            style={[styles.continueButton, loading && styles.continueButtonDisabled]}
-            onPress={handleContinue}
-            disabled={loading}
-          >
-            <Text style={styles.continueButtonText}>
-              {loading ? 'Adding...' : `Continue with ${selectedStans.length} selected`}
-            </Text>
-          </TouchableOpacity>
-        ) : (
-          <Text style={{ color: 'white', textAlign: 'center', padding: 20 }}>
-            Select at least one stan to continue (Debug: {selectedStans.length} selected)
+        {/* Fixed Bottom Button */}
+        <View style={styles.bottomBar}>
+        <TouchableOpacity
+          style={[
+            styles.continueButton, 
+            (loading || selectedStans.length === 0) && styles.continueButtonDisabled
+          ]}
+          onPress={handleContinue}
+          disabled={loading || selectedStans.length === 0}
+        >
+          <Text style={styles.continueButtonText}>
+            {loading 
+              ? 'Adding...' 
+              : selectedStans.length > 0 
+                ? `Continue with ${selectedStans.length} selected`
+                : 'Select at least one stan to continue'
+            }
           </Text>
-        )}
-      </View>
+        </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     </View>
   );
 }
@@ -294,37 +341,42 @@ export default function OnboardingScreen({ navigation }: OnboardingScreenProps) 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: AppleMusicTheme.colors.background,
+  },
+  safeArea: {
+    flex: 1,
   },
   header: {
-    padding: 20,
-    paddingTop: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    padding: AppleMusicTheme.spacing.screenPadding,
+    paddingTop: AppleMusicTheme.spacing.screenPadding,
+    borderBottomWidth: 0.33,
+    borderBottomColor: AppleMusicTheme.colors.separator,
+    backgroundColor: AppleMusicTheme.colors.background,
+    flexShrink: 0,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 8,
+    ...AppleMusicTheme.typography.title1,
+    color: AppleMusicTheme.colors.primary,
+    marginBottom: AppleMusicTheme.spacing.sm,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
-    color: '#666',
+    ...AppleMusicTheme.typography.body,
+    color: AppleMusicTheme.colors.secondary,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 15,
   },
   selectionBadge: {
-    backgroundColor: '#000',
+    backgroundColor: AppleMusicTheme.colors.accent,
     borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: AppleMusicTheme.spacing.md,
+    paddingVertical: AppleMusicTheme.spacing.sm,
     alignSelf: 'center',
   },
   selectionText: {
-    color: '#fff',
-    fontSize: 14,
+    ...AppleMusicTheme.typography.footnote,
+    color: '#ffffff',
     fontWeight: '600',
   },
   scrollView: {
@@ -332,14 +384,16 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingBottom: 120,
+    paddingTop: 10,
+    paddingBottom: 140,
   },
   flatList: {
     flex: 1,
   },
   flatListContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 100,
+    paddingHorizontal: AppleMusicTheme.spacing.screenPadding,
+    paddingTop: AppleMusicTheme.spacing.sm,
+    paddingBottom: 120,
   },
   categorySection: {
     marginBottom: 25,
@@ -352,17 +406,17 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   suggestionCard: {
-    backgroundColor: '#f9f9f9',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    backgroundColor: AppleMusicTheme.colors.surface,
+    borderRadius: AppleMusicTheme.borderRadius.card,
+    padding: AppleMusicTheme.spacing.cardPadding,
+    marginBottom: AppleMusicTheme.spacing.sm,
     borderLeftWidth: 4,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: AppleMusicTheme.spacing.sm,
   },
   cardInfo: {
     flexDirection: 'row',
@@ -370,39 +424,42 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   categoryIcon: {
-    fontSize: 24,
-    marginRight: 12,
+    fontSize: 28,
+    marginRight: AppleMusicTheme.spacing.md,
+    lineHeight: 32,
+    textAlign: 'center',
+    minWidth: 32,
   },
   cardText: {
     flex: 1,
   },
   stanName: {
-    fontSize: 18,
-    fontWeight: '600',
+    ...AppleMusicTheme.typography.headline,
+    color: AppleMusicTheme.colors.primary,
     marginBottom: 2,
   },
   stanCategory: {
-    fontSize: 14,
-    color: '#666',
+    ...AppleMusicTheme.typography.footnote,
+    color: AppleMusicTheme.colors.secondary,
   },
   selectButton: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: AppleMusicTheme.colors.surfaceSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: AppleMusicTheme.colors.separator,
   },
   selectButtonText: {
-    fontSize: 16,
+    ...AppleMusicTheme.typography.callout,
     fontWeight: 'bold',
-    color: '#666',
+    color: AppleMusicTheme.colors.secondary,
   },
   stanDescription: {
-    fontSize: 14,
-    color: '#666',
+    ...AppleMusicTheme.typography.footnote,
+    color: AppleMusicTheme.colors.secondary,
     lineHeight: 20,
   },
   footer: {
@@ -413,8 +470,8 @@ const styles = StyleSheet.create({
     padding: 15,
   },
   skipText: {
-    fontSize: 16,
-    color: '#666',
+    ...AppleMusicTheme.typography.callout,
+    color: AppleMusicTheme.colors.secondary,
     textDecorationLine: 'underline',
   },
   bottomBar: {
@@ -422,24 +479,26 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    padding: 20,
+    backgroundColor: AppleMusicTheme.colors.background,
+    borderTopWidth: 0.33,
+    borderTopColor: AppleMusicTheme.colors.separator,
+    padding: AppleMusicTheme.spacing.screenPadding,
     paddingBottom: 40,
+    zIndex: 1000,
+    flexShrink: 0,
   },
   continueButton: {
-    backgroundColor: '#000',
-    borderRadius: 12,
+    backgroundColor: AppleMusicTheme.colors.accent,
+    borderRadius: AppleMusicTheme.borderRadius.button,
     padding: 18,
     alignItems: 'center',
   },
   continueButtonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: AppleMusicTheme.colors.surfaceSecondary,
   },
   continueButtonText: {
-    color: '#fff',
-    fontSize: 18,
+    ...AppleMusicTheme.typography.headline,
+    color: '#ffffff',
     fontWeight: '600',
   },
 });
