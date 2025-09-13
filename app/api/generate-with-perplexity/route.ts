@@ -147,7 +147,7 @@ IMPORTANT:
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'llama-3.1-sonar-large-128k-online', // Using large model for better understanding
+        model: 'sonar', // Using sonar model for real-time search
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.85, // Higher temperature for more lively, creative content
         max_tokens: 1200 // More tokens for detailed responses
