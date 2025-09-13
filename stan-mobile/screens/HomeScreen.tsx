@@ -536,9 +536,41 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 style={styles.cardGradient}
               >
                 <View style={styles.cardMeta}>
-                  <Text style={styles.sourceCount}>
-                    {topic.sources?.length || 0} SOURCES
-                  </Text>
+                  <View style={styles.sourceButtonsContainer}>
+                    {topic.sources && topic.sources.slice(0, 2).map((source: string, index: number) => (
+                      <TouchableOpacity 
+                        key={index}
+                        style={styles.sourceButton}
+                        onPress={() => Linking.openURL(source).catch(err => 
+                          Alert.alert('Error', 'Unable to open this link')
+                        )}
+                      >
+                        <Text style={styles.sourceButtonText}>
+                          {source.includes('youtube.com') ? '📺' : 
+                           source.includes('instagram.com') ? '📷' : 
+                           source.includes('twitter.com') || source.includes('x.com') ? '🐦' :
+                           source.includes('tiktok.com') ? '🎵' : '🔗'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                    {topic.sources && topic.sources.length > 2 && (
+                      <TouchableOpacity 
+                        style={styles.sourceButton}
+                        onPress={() => {
+                          Alert.alert(
+                            'All Sources',
+                            topic.sources?.map((source: string, i: number) => `${i + 1}. ${source}`).join('\n\n') || 'No sources available',
+                            [
+                              { text: 'Cancel' },
+                              { text: 'Open First', onPress: () => topic.sources?.[0] && Linking.openURL(topic.sources[0]) }
+                            ]
+                          );
+                        }}
+                      >
+                        <Text style={styles.sourceButtonText}>+{topic.sources.length - 2}</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                   <Text style={styles.timeAgo}>Now</Text>
                 </View>
                 <Text style={styles.artistName}>{item.stan.name}</Text>
@@ -743,9 +775,41 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                   style={styles.cardGradient}
                 >
                   <View style={styles.cardMeta}>
-                    <Text style={styles.sourceCount}>
-                      {item.topic.sources?.length || 0} SOURCES
-                    </Text>
+                    <View style={styles.sourceButtonsContainer}>
+                      {item.topic.sources && item.topic.sources.slice(0, 2).map((source: string, index: number) => (
+                        <TouchableOpacity 
+                          key={index}
+                          style={styles.sourceButton}
+                          onPress={() => Linking.openURL(source).catch(err => 
+                            Alert.alert('Error', 'Unable to open this link')
+                          )}
+                        >
+                          <Text style={styles.sourceButtonText}>
+                            {source.includes('youtube.com') ? '📺' : 
+                             source.includes('instagram.com') ? '📷' : 
+                             source.includes('twitter.com') || source.includes('x.com') ? '🐦' :
+                             source.includes('tiktok.com') ? '🎵' : '🔗'}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                      {item.topic.sources && item.topic.sources.length > 2 && (
+                        <TouchableOpacity 
+                          style={styles.sourceButton}
+                          onPress={() => {
+                            Alert.alert(
+                              'All Sources',
+                              item.topic.sources?.map((source: string, i: number) => `${i + 1}. ${source}`).join('\n\n') || 'No sources available',
+                              [
+                                { text: 'Cancel' },
+                                { text: 'Open First', onPress: () => item.topic.sources?.[0] && Linking.openURL(item.topic.sources[0]) }
+                              ]
+                            );
+                          }}
+                        >
+                          <Text style={styles.sourceButtonText}>+{item.topic.sources.length - 2}</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                     <Text style={styles.timeAgo}>Now</Text>
                   </View>
                   <Text style={styles.artistName}>{item.stan.name}</Text>
@@ -931,13 +995,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: AppleMusicTheme.spacing.sm,
   },
-  sourceCount: {
+  sourceButtonsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sourceButton: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginRight: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  sourceButtonText: {
     ...AppleMusicTheme.typography.caption,
     color: '#ffffff',
-    opacity: 0.8,
-    textTransform: 'uppercase',
     fontWeight: '600',
-    letterSpacing: 0.5,
+    fontSize: 12,
   },
   timeAgo: {
     ...AppleMusicTheme.typography.caption,

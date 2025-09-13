@@ -222,7 +222,7 @@ IMPORTANT:
     return {
       topics: [{
         title: "📰 Latest Update",
-        content: cleanContent.substring(0, 150) + "...",
+        content: cleanContent,
         sources: []
       }],
       searchSources: [],
