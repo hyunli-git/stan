@@ -410,6 +410,23 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
           </Text>
         </View>
 
+        {/* TEST BUTTON */}
+        <View style={{ padding: 20 }}>
+          <TouchableOpacity
+            style={{
+              backgroundColor: 'red',
+              padding: 20,
+              borderRadius: 10,
+              alignItems: 'center',
+            }}
+            onPress={() => Alert.alert('TOP TEST BUTTON WORKS!')}
+          >
+            <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>
+              🔴 TOP TEST BUTTON
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Search Input */}
         <View style={styles.searchSection}>
           <Text style={styles.label}>Search for stans to follow</Text>
@@ -481,25 +498,17 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
             {/* Fixed Bottom Add Button */}
             <View style={styles.fixedBottomButton}>
               <TouchableOpacity
-                style={[
-                  styles.bulkAddButton, 
-                  loading && styles.addButtonDisabled,
-                  selectedStans.length === 0 && styles.addButtonDisabled
-                ]}
+                style={[styles.bulkAddButton]}
                 onPress={() => {
                   console.log('🚀 BUTTON PRESSED! Starting handleAddStans...');
-                  handleAddStans();
+                  Alert.alert('BUTTON WORKS!', `Selected: ${selectedStans.length} stans`);
+                  // handleAddStans();
                 }}
-                disabled={loading || selectedStans.length === 0}
+                disabled={false}
                 activeOpacity={0.8}
               >
                 <Text style={styles.bulkAddButtonText}>
-                  {loading 
-                    ? 'Adding...' 
-                    : selectedStans.length === 0
-                    ? 'Select stans to follow'
-                    : `✨ Start Following ${selectedStans.length} ${selectedStans.length === 1 ? 'Stan' : 'Stans'}`
-                  }
+                  🚀 TEST BUTTON - TAP ME!
                 </Text>
               </TouchableOpacity>
             </View>
