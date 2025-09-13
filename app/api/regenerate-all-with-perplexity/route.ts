@@ -231,6 +231,8 @@ export async function POST(request: NextRequest) {
 
     console.log('🗑️ Step 1: Clearing ALL old briefings...');
     
+    const supabase = getSupabaseClient();
+    
     // Clear ALL briefings from both tables
     const { error: clearBriefingsError } = await supabase
       .from('briefings')

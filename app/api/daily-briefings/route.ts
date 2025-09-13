@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Initialize with service role to bypass RLS for server-side operations
 function getSupabaseClient() {
@@ -19,23 +18,211 @@ if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
   console.error('❌ SUPABASE_SERVICE_ROLE_KEY is not configured');
 }
 
-// Initialize Gemini 2.5 Flash with Grounding
-function getGeminiModel() {
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GOOGLE_AI_API_KEY is not configured');
+// Function to extract images from various sources
+const extractImagesFromSources = async (sources: string[]): Promise<any[]> => {
+  const images = [];
+  
+  for (const source of sources) {
+    try {
+      // YouTube video
+      if (source.includes('youtube.com/watch') || source.includes('youtu.be/')) {
+        const videoIdMatch = source.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+        if (videoIdMatch) {
+          const videoId = videoIdMatch[1];
+          images.push({
+            url: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
+            alt: 'YouTube video',
+            source: source,
+            thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+          });
+        }
+      }
+      // Twitter/X specific posts
+      else if ((source.includes('twitter.com/') || source.includes('x.com/')) && source.includes('/status/')) {
+        images.push({
+          url: `https://via.placeholder.com/400x300/1DA1F2/ffffff?text=Twitter+Post`,
+          alt: 'Twitter post',
+          source: source,
+          thumbnail: `https://via.placeholder.com/200x150/1DA1F2/ffffff?text=X`
+        });
+      }
+      // Instagram specific posts
+      else if (source.includes('instagram.com/p/') || source.includes('instagram.com/reel/')) {
+        images.push({
+          url: `https://via.placeholder.com/400x400/E4405F/ffffff?text=Instagram`,
+          alt: 'Instagram post',
+          source: source,
+          thumbnail: `https://via.placeholder.com/200x200/E4405F/ffffff?text=IG`
+        });
+      }
+      // TikTok specific videos
+      else if (source.includes('tiktok.com/@') && source.includes('/video/')) {
+        images.push({
+          url: `https://via.placeholder.com/400x600/000000/ffffff?text=TikTok`,
+          alt: 'TikTok video',
+          source: source,
+          thumbnail: `https://via.placeholder.com/200x300/000000/ffffff?text=TikTok`
+        });
+      }
+    } catch (error) {
+      console.error(`Error extracting image from ${source}:`, error);
+    }
   }
   
-  const genAI = new GoogleGenerativeAI(apiKey);
-  return genAI.getGenerativeModel({ 
-    model: "gemini-2.0-flash-exp"
-  });
+  return images;
+};
+
+// Perplexity API generation function
+const generateWithPerplexity = async (stanName: string, category: string) => {
+  try {
+    const today = new Date().toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    
+    const prompt = `Today is ${today}. Search for the LATEST updates about "${stanName}" from the last 24-48 hours. Focus on what's happening RIGHT NOW - today's activities, viral moments, and fan reactions.
+
+Find and include:
+- What ${stanName} did TODAY or YESTERDAY specifically
+- Viral fan content, edits, or memes trending right now
+- Real-time social media reactions and trending hashtags
+- Fan accounts reporting sightings, airport photos, or live updates
+- Any content going viral on TikTok, Twitter/X, Instagram, or YouTube
+- If no official updates, include popular fan theories, discussions, or creative content
+
+Return as JSON with ACTUAL URLs to specific posts/videos (not just domain names):
+
+{
+  "topics": [
+    {
+      "title": "🔥 Breaking & Hot Right Now",
+      "content": "URGENT updates from the last 24 hours - surprise releases, live appearances, viral moments, or trending topics. Be specific with times and details!",
+      "sources": ["actual_news_url", "actual_video_url", "actual_social_post"]
+    },
+    {
+      "title": "💬 Stan Twitter & Fan Reactions",
+      "content": "What fans are going CRAZY about - viral edits, memes, trending hashtags, fan theories, or community discussions. Include usernames and view counts!",
+      "sources": ["actual_tweet_url", "actual_tiktok_url", "actual_fan_account"]
+    },
+    {
+      "title": "📸 Visual Content & Fashion Moments", 
+      "content": "Recent photos, outfits, aesthetic content, or visual moments fans are obsessing over. Include fashion brands, styling details, or photo shoots!",
+      "sources": ["actual_instagram_post", "actual_photoshoot", "actual_fashion_article"]
+    },
+    {
+      "title": "🎵 Music, Performances & Studio Updates",
+      "content": "New music, live performances, covers, studio sessions, collaborations, or music-related content. Include streaming numbers and chart positions!",
+      "sources": ["actual_music_video", "actual_performance_clip", "actual_studio_update"]
+    },
+    {
+      "title": "🎬 Video Content & Behind-the-Scenes",
+      "content": "New videos, vlogs, behind-the-scenes content, interviews, or documentary footage. Include specific moments fans are talking about!",
+      "sources": ["actual_youtube_video", "actual_interview", "actual_bts_content"]
+    },
+    {
+      "title": "🏆 Records, Awards & Achievements",
+      "content": "Chart achievements, award wins, certifications, milestone numbers, or record-breaking moments. Include specific statistics and rankings!",
+      "sources": ["actual_chart_news", "actual_award_announcement", "actual_milestone_post"]
+    },
+    {
+      "title": "✈️ Travel, Appearances & Sightings",
+      "content": "Airport photos, public appearances, event sightings, or travel updates. Include locations, fan encounters, and specific details!",
+      "sources": ["actual_airport_photo", "actual_event_coverage", "actual_sighting_post"]
+    },
+    {
+      "title": "🤝 Collaborations & Industry News",
+      "content": "New collaborations, brand partnerships, industry connections, or business updates. Include partner details and project information!",
+      "sources": ["actual_collab_announcement", "actual_brand_partnership", "actual_industry_news"]
+    },
+    {
+      "title": "💝 Personal Updates & Life Moments",
+      "content": "Personal posts, life updates, family moments, or intimate shares from the artist. Include emotional fan reactions and personal details!",
+      "sources": ["actual_personal_post", "actual_life_update", "actual_intimate_moment"]
+    },
+    {
+      "title": "📅 Upcoming & Future Plans",
+      "content": "Confirmed upcoming events, teased releases, tour dates, or future projects fans are anticipating. Include countdowns and preparation details!",
+      "sources": ["actual_announcement", "actual_teaser", "actual_tour_date"]
+    }
+  ]
 }
 
-// Configure generation with Google Search
-const generationConfig = {
-  temperature: 0.7,
-  maxOutputTokens: 1000,
+IMPORTANT: 
+- Use casual, excited fan language ("OMG", "literally crying", "we won", etc.)
+- Include specific times ("3 hours ago", "last night", "this morning")
+- Mention viral view counts ("5M views in 2 hours")
+- Reference fan inside jokes or memes if relevant
+- Make it feel URGENT and CURRENT - not generic news`;
+
+    const response = await fetch('https://api.perplexity.ai/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.PERPLEXITY_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'llama-3.1-sonar-large-128k-online',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.85,
+        max_tokens: 1200
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('Perplexity API error:', error);
+      throw new Error(`Perplexity API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const content = data.choices[0].message.content;
+
+    // Parse the response
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        
+        // Extract all sources
+        const allSources = parsed.topics.flatMap((t: any) => t.sources || []);
+        
+        // Extract images from sources
+        const images = await extractImagesFromSources(allSources);
+        
+        // Add images to each topic
+        for (const topic of parsed.topics) {
+          if (topic.sources && topic.sources.length > 0) {
+            topic.images = await extractImagesFromSources(topic.sources);
+          }
+        }
+        
+        return {
+          topics: parsed.topics,
+          searchSources: allSources,
+          images: images
+        };
+      }
+    } catch (parseError) {
+      console.error('Parse error:', parseError);
+    }
+
+    // Fallback
+    return {
+      topics: [{
+        title: "📰 Today's Update",
+        content: content.substring(0, 200) + "...",
+        sources: []
+      }],
+      searchSources: [],
+      images: []
+    };
+
+  } catch (error) {
+    console.error('Perplexity generation error:', error);
+    throw error;
+  }
 };
 
 interface Stan {
@@ -185,11 +372,12 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: Generate daily briefings for all stans
+// POST: Generate daily briefings for all stans using Perplexity
 export async function POST(request: NextRequest) {
   try {
     const { force = false } = await request.json();
     const today = new Date().toISOString().split('T')[0];
+    const supabase = getSupabaseClient();
 
     // Check if briefings already exist for today (unless force is true)
     if (!force) {
@@ -207,6 +395,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Check for Perplexity API key
+    if (!process.env.PERPLEXITY_API_KEY) {
+      return NextResponse.json({
+        error: 'Perplexity API key not configured',
+        message: 'Please add PERPLEXITY_API_KEY to environment variables',
+        setup: 'Get your API key at: https://www.perplexity.ai/settings/api'
+      }, { status: 500 });
+    }
+
     // Get all active stans
     const { data: stans, error: stansError } = await supabase
       .from('stans')
@@ -221,7 +418,8 @@ export async function POST(request: NextRequest) {
           color
         )
       `)
-      .eq('is_active', true);
+      .eq('is_active', true)
+      .limit(50); // Limit to prevent timeout
 
     if (stansError) throw stansError;
 
@@ -232,320 +430,113 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    console.log(`🚀 Generating daily briefings for ${stans.length} stans`);
+    console.log(`🚀 Generating daily briefings with Perplexity for ${stans.length} stans`);
 
-    const briefingsToInsert = [];
+    const results = [];
+    const errors = [];
 
-    // Generate briefings for each stan
+    // Generate briefings for each stan using Perplexity
     for (const stan of stans) {
       try {
-        console.log(`📰 Generating briefing for: ${stan.name}`);
+        console.log(`🔥 Generating LIVE briefing with Perplexity for: ${stan.name}`);
         
-        const briefingContent = await generateStanBriefing(stan);
+        // Handle categories - could be object or array
+        const category = Array.isArray(stan.categories) ? stan.categories[0] : stan.categories;
         
-        briefingsToInsert.push({
-          stan_id: stan.id,
-          date: today,
-          content: JSON.stringify(briefingContent),
-          topics: briefingContent.topics,
-          search_sources: briefingContent.searchSources || [],
-          images: briefingContent.images || [],
-          created_at: new Date().toISOString(),
+        const briefingContent = await generateWithPerplexity(
+          stan.name,
+          category.name
+        );
+
+        // Save to daily_briefings table
+        const { data: savedBriefing, error: saveError } = await supabase
+          .from('daily_briefings')
+          .insert({
+            stan_id: stan.id,
+            date: today,
+            content: JSON.stringify(briefingContent),
+            topics: briefingContent.topics,
+            search_sources: briefingContent.searchSources || [],
+            images: briefingContent.images || [],
+            created_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+
+        if (saveError) throw saveError;
+
+        results.push({
+          stan: stan.name,
+          success: true,
+          topicCount: briefingContent.topics.length,
+          imageCount: briefingContent.images?.length || 0
         });
 
-        console.log(`✅ Generated briefing for: ${stan.name}`);
+        console.log(`✅ Generated Perplexity briefing for ${stan.name} with ${briefingContent.topics.length} topics and ${briefingContent.images?.length || 0} images`);
         
-        // Add small delay to avoid rate limits
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Add delay to avoid rate limits
+        await new Promise(resolve => setTimeout(resolve, 1500));
         
       } catch (error) {
-        console.error(`❌ Failed to generate briefing for ${stan.name}:`, error);
+        console.error(`❌ Failed to generate Perplexity briefing for ${stan.name}:`, error);
+        errors.push({
+          stan: stan.name,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
         
         // Create fallback briefing
-        briefingsToInsert.push({
-          stan_id: stan.id,
-          date: today,
-          content: JSON.stringify({
-            topics: [{
-              title: "Daily Update",
-              content: `Unable to generate briefing for ${stan.name} today. Please try again later.`,
-              sources: []
-            }]
-          }),
-          topics: [{
-            title: "Daily Update",
-            content: `Unable to generate briefing for ${stan.name} today. Please try again later.`,
-            sources: []
-          }],
-          search_sources: [],
-          created_at: new Date().toISOString(),
-        });
+        try {
+          await supabase
+            .from('daily_briefings')
+            .insert({
+              stan_id: stan.id,
+              date: today,
+              content: JSON.stringify({
+                topics: [{
+                  title: "📰 Daily Update",
+                  content: `Unable to generate live briefing for ${stan.name} today. Please try again later.`,
+                  sources: []
+                }]
+              }),
+              topics: [{
+                title: "📰 Daily Update",
+                content: `Unable to generate live briefing for ${stan.name} today. Please try again later.`,
+                sources: []
+              }],
+              search_sources: [],
+              images: [],
+              created_at: new Date().toISOString(),
+            });
+        } catch (fallbackError) {
+          console.error(`❌ Failed to create fallback briefing for ${stan.name}:`, fallbackError);
+        }
       }
     }
 
-    // Insert all briefings
-    const { error: insertError } = await supabase
-      .from('daily_briefings')
-      .insert(briefingsToInsert);
-
-    if (insertError) throw insertError;
-
-    console.log(`🎉 Successfully generated ${briefingsToInsert.length} daily briefings`);
+    console.log(`🎉 Successfully generated ${results.length} Perplexity briefings`);
 
     return NextResponse.json({ 
-      message: `Generated ${briefingsToInsert.length} daily briefings`,
+      success: true,
+      message: `Generated ${results.length} daily briefings with Perplexity`,
       date: today,
-      count: briefingsToInsert.length
+      results: results,
+      errors: errors,
+      totalStans: stans.length,
+      successCount: results.length,
+      errorCount: errors.length,
+      source: 'Perplexity API with real-time web search'
     });
 
   } catch (error) {
-    console.error('Error generating daily briefings:', error);
+    console.error('Error generating daily briefings with Perplexity:', error);
     return NextResponse.json(
       { 
         error: 'Failed to generate daily briefings',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
+        source: 'Perplexity API'
       },
       { status: 500 }
     );
   }
 }
 
-// Function to extract TikTok thumbnail from URL
-const extractTikTokThumbnail = async (url: string): Promise<string | null> => {
-  try {
-    if (!url.includes('tiktok.com')) return null;
-    
-    // Extract video ID from TikTok URL
-    const videoIdMatch = url.match(/\/video\/(\d+)/);
-    if (!videoIdMatch) return null;
-    
-    const videoId = videoIdMatch[1];
-    // TikTok thumbnail pattern
-    return `https://p16-sign-va.tiktokcdn.com/obj/tos-maliva-p-0068/o${videoId}_1634025114?x-expires=1893456000&x-signature=dummy`;
-  } catch (error) {
-    console.error('Error extracting TikTok thumbnail:', error);
-    return null;
-  }
-};
-
-// Function to extract images from various sources
-const extractImagesFromSources = async (sources: string[]): Promise<ImageData[]> => {
-  const images: ImageData[] = [];
-  
-  for (const source of sources) {
-    try {
-      // TikTok thumbnail
-      if (source.includes('tiktok.com')) {
-        const thumbnail = await extractTikTokThumbnail(source);
-        if (thumbnail) {
-          images.push({
-            url: thumbnail,
-            alt: 'TikTok video thumbnail',
-            source: source,
-            thumbnail: thumbnail
-          });
-        }
-      }
-      
-      // YouTube thumbnail
-      else if (source.includes('youtube.com') || source.includes('youtu.be')) {
-        const videoIdMatch = source.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
-        if (videoIdMatch) {
-          const videoId = videoIdMatch[1];
-          const thumbnail = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
-          images.push({
-            url: thumbnail,
-            alt: 'YouTube video thumbnail',
-            source: source,
-            thumbnail: thumbnail
-          });
-        }
-      }
-      
-      // Instagram post (placeholder - would need proper API)
-      else if (source.includes('instagram.com')) {
-        images.push({
-          url: 'https://via.placeholder.com/400x400/E4405F/ffffff?text=Instagram+Post',
-          alt: 'Instagram post',
-          source: source,
-          thumbnail: 'https://via.placeholder.com/200x200/E4405F/ffffff?text=Instagram'
-        });
-      }
-      
-      // Twitter/X post (placeholder)
-      else if (source.includes('twitter.com') || source.includes('x.com')) {
-        images.push({
-          url: 'https://via.placeholder.com/400x200/1DA1F2/ffffff?text=Twitter+Post',
-          alt: 'Twitter post',
-          source: source,
-          thumbnail: 'https://via.placeholder.com/200x100/1DA1F2/ffffff?text=Twitter'
-        });
-      }
-      
-    } catch (error) {
-      console.error(`Error extracting image from ${source}:`, error);
-    }
-  }
-  
-  return images;
-};
-
-const generateStanBriefing = async (stan: Stan): Promise<BriefingContent> => {
-  try {
-    const today = new Date().toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      weekday: 'long'
-    });
-
-    // Handle categories - could be object or array
-    const category = Array.isArray(stan.categories) ? stan.categories[0] : stan.categories;
-
-    const prompt = `Today is ${today}. Search the web for the most current and up-to-date information about "${stan.name}" and create an English briefing.
-
-Category: ${category.name}
-Description: ${stan.description || 'None'}
-
-Please write in the following JSON format with separate topics:
-
-{
-  "topics": [
-    {
-      "title": "Recent News & Activities",
-      "content": "2-3 sentences about recent news with specific dates and details. Use emojis appropriately.",
-      "sources": ["url1", "url2"] // Include actual source URLs found in your search
-    },
-    {
-      "title": "Social Media & Fan Reactions", 
-      "content": "2-3 sentences about social media activity and fan reactions. Use emojis appropriately.",
-      "sources": ["url1", "url2"] // Include actual source URLs found in your search
-    },
-    {
-      "title": "Upcoming Events & Releases",
-      "content": "2-3 sentences about upcoming schedules and planned activities. Use emojis appropriately.", 
-      "sources": ["url1", "url2"] // Include actual source URLs found in your search
-    }
-  ],
-  "searchSources": ["all_urls_you_found_during_search"]
-}
-
-CRITICAL REQUIREMENTS:
-1. Use real web search to find current information
-2. Include ACTUAL source URLs in each topic's "sources" array
-3. Focus on news from today (${today}) or recent days
-4. Return valid JSON format only
-5. Each topic should be concise and focused on one area`;
-
-    console.log('🌐 Using Gemini 2.5 Flash with Google Search Grounding for real-time information');
-    
-    // Use Gemini with Google Search Grounding for real web search results
-    const model = getGeminiModel();
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig
-    });
-    const briefingText = result.response.text();
-    
-    // Try to parse structured JSON response
-    let parsedBriefing: { topics?: BriefingTopic[], searchSources?: string[] } | null = null;
-    try {
-      console.log('🔍 Raw Gemini response:', briefingText.substring(0, 500) + '...');
-      
-      // Extract JSON from code blocks or find JSON object
-      const jsonBlockMatch = briefingText.match(/```json\s*([\s\S]*?)\s*```/);
-      const jsonMatch = jsonBlockMatch ? jsonBlockMatch[1] : briefingText.match(/\{[\s\S]*\}/)?.[0];
-      
-      if (jsonMatch) {
-        console.log('🔍 Found JSON match:', jsonMatch.substring(0, 200) + '...');
-        
-        let cleanJson = jsonMatch
-          .replace(/\/\/.*$/gm, '') // Remove comments
-          .replace(/,(\\s*[}\\]])/g, '$1') // Remove trailing commas
-          .replace(/\\\\"/g, '"') // Fix escaped quotes
-          .replace(/[\u0000-\u001f]/g, '') // Remove control characters
-          .replace(/\\n/g, ' ') // Replace newlines with spaces
-          .replace(/\\r/g, '') // Remove carriage returns
-          .replace(/\\t/g, ' ') // Replace tabs with spaces
-          .replace(/\\s+/g, ' ') // Normalize multiple spaces
-          .trim();
-        
-        // Additional cleanup for common Gemini formatting issues
-        cleanJson = cleanJson
-          .replace(/"\s*:\s*"/g, '": "') // Fix spacing around colons
-          .replace(/",\s*"/g, '", "') // Fix spacing around commas
-          .replace(/"\s*,/g, '",') // Fix trailing spaces before commas
-          .replace(/\{\s+/g, '{') // Remove spaces after opening braces
-          .replace(/\s+\}/g, '}') // Remove spaces before closing braces
-          .replace(/\[\s+/g, '[') // Remove spaces after opening brackets
-          .replace(/\s+\]/g, ']'); // Remove spaces before closing brackets
-        
-        console.log('🧹 Cleaned JSON:', cleanJson.substring(0, 300) + '...');
-        
-        parsedBriefing = JSON.parse(cleanJson);
-        console.log('✅ Successfully parsed JSON response');
-      }
-    } catch (parseError) {
-      console.log('❌ Failed to parse JSON response, trying manual extraction');
-      console.log('❌ Parse error:', parseError);
-      console.log('❌ Problematic JSON snippet:', briefingText.substring(0, 600));
-    }
-
-    let topics: BriefingTopic[] = [];
-    let searchSources: string[] = [];
-    
-    if (parsedBriefing?.topics) {
-      topics = parsedBriefing.topics;
-      searchSources = parsedBriefing.searchSources || [];
-      console.log('✅ Successfully parsed structured briefing with', topics.length, 'topics');
-    } else {
-      // Fallback: Split plain text into topics
-      const sections = briefingText.split(/\d+\.\s*/).filter(s => s.trim().length > 10);
-      topics = sections.map((section, index) => ({
-        title: `Topic ${index + 1}`,
-        content: section.trim(),
-        sources: []
-      }));
-      console.log('📝 Using fallback text parsing with', topics.length, 'topics');
-    }
-    
-    // Fallback sources if no real sources found
-    const fallbackSources = [
-      `https://www.google.com/search?q=${encodeURIComponent(stan.name + ' latest news today')}`,
-      `https://www.google.com/search?q=${encodeURIComponent(stan.name + ' recent updates ' + new Date().getFullYear())}`
-    ];
-
-    // Extract images from all sources
-    const allSources = searchSources.length > 0 ? searchSources : fallbackSources;
-    const topicSources = topics.flatMap(topic => topic.sources || []);
-    const extractedImages = await extractImagesFromSources([...allSources, ...topicSources]);
-    
-    // Add images to topics based on their sources
-    for (const topic of topics) {
-      if (topic.sources && topic.sources.length > 0) {
-        topic.images = await extractImagesFromSources(topic.sources);
-      }
-    }
-    
-    console.log(`🖼️ Extracted ${extractedImages.length} images for ${stan.name}`);
-
-    return {
-      topics: topics,
-      searchSources: searchSources.length > 0 ? searchSources : fallbackSources,
-      images: extractedImages
-    };
-
-  } catch (error) {
-    console.error('Gemini API Error:', error);
-    
-    // Fallback to simple content
-    return {
-      topics: [{
-        title: "Daily Update",
-        content: `Unable to generate detailed briefing for ${stan.name} today. Please check back later for updates.`,
-        sources: []
-      }],
-      searchSources: []
-    };
-  }
-};
