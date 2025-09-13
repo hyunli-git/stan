@@ -536,41 +536,6 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 style={styles.cardGradient}
               >
                 <View style={styles.cardMeta}>
-                  <View style={styles.sourceButtonsContainer}>
-                    {topic.sources && topic.sources.slice(0, 2).map((source: string, index: number) => (
-                      <TouchableOpacity 
-                        key={index}
-                        style={styles.sourceButton}
-                        onPress={() => Linking.openURL(source).catch(err => 
-                          Alert.alert('Error', 'Unable to open this link')
-                        )}
-                      >
-                        <Text style={styles.sourceButtonText}>
-                          {source.includes('youtube.com') ? '📺' : 
-                           source.includes('instagram.com') ? '📷' : 
-                           source.includes('twitter.com') || source.includes('x.com') ? '🐦' :
-                           source.includes('tiktok.com') ? '🎵' : '🔗'}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                    {topic.sources && topic.sources.length > 2 && (
-                      <TouchableOpacity 
-                        style={styles.sourceButton}
-                        onPress={() => {
-                          Alert.alert(
-                            'All Sources',
-                            topic.sources?.map((source: string, i: number) => `${i + 1}. ${source}`).join('\n\n') || 'No sources available',
-                            [
-                              { text: 'Cancel' },
-                              { text: 'Open First', onPress: () => topic.sources?.[0] && Linking.openURL(topic.sources[0]) }
-                            ]
-                          );
-                        }}
-                      >
-                        <Text style={styles.sourceButtonText}>+{topic.sources.length - 2}</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
                   <Text style={styles.timeAgo}>Now</Text>
                 </View>
                 <Text style={styles.artistName}>{item.stan.name}</Text>
@@ -601,21 +566,41 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 )}
                 
                 <View style={styles.cardActions}>
-                  {topic.sources && topic.sources.length > 0 && (
-                    <TouchableOpacity 
-                      style={styles.viewSourcesButton}
-                      onPress={() => {
-                        // Open the first source directly
-                        if (topic.sources && topic.sources[0]) {
-                          Linking.openURL(topic.sources[0]).catch(err => 
-                            Alert.alert('Error', 'Unable to open this link')
+                  <View style={styles.sourceButtonsContainer}>
+                    {topic.sources && topic.sources.slice(0, 3).map((source: string, index: number) => (
+                      <TouchableOpacity 
+                        key={index}
+                        style={styles.sourceButton}
+                        onPress={() => Linking.openURL(source).catch(err => 
+                          Alert.alert('Error', 'Unable to open this link')
+                        )}
+                      >
+                        <Text style={styles.sourceButtonText}>
+                          {source.includes('youtube.com') ? '📺' : 
+                           source.includes('instagram.com') ? '📷' : 
+                           source.includes('twitter.com') || source.includes('x.com') ? '🐦' :
+                           source.includes('tiktok.com') ? '🎵' : '🔗'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                    {topic.sources && topic.sources.length > 3 && (
+                      <TouchableOpacity 
+                        style={styles.sourceButton}
+                        onPress={() => {
+                          Alert.alert(
+                            'All Sources',
+                            topic.sources?.map((source: string, i: number) => `${i + 1}. ${source}`).join('\n\n') || 'No sources available',
+                            [
+                              { text: 'Cancel' },
+                              { text: 'Open First', onPress: () => topic.sources?.[0] && Linking.openURL(topic.sources[0]) }
+                            ]
                           );
-                        }
-                      }}
-                    >
-                      <Text style={styles.actionButtonText}>View Sources</Text>
-                    </TouchableOpacity>
-                  )}
+                        }}
+                      >
+                        <Text style={styles.sourceButtonText}>+{topic.sources.length - 3}</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
               </LinearGradient>
             </View>
@@ -775,8 +760,38 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                   style={styles.cardGradient}
                 >
                   <View style={styles.cardMeta}>
+                    <Text style={styles.timeAgo}>Now</Text>
+                  </View>
+                  <Text style={styles.artistName}>{item.stan.name}</Text>
+                  <Text style={styles.topicTitle}>{generateShortTitle(item.topic.title, item.topic.content)}</Text>
+                  <Text style={styles.topicContent}>{item.topic.content}</Text>
+                  
+                  {/* Display images from topic or sources */}
+                  {(item.topic.images && item.topic.images.length > 0) ? (
+                    <ScrollView 
+                      horizontal 
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.imageScrollContainer}
+                    >
+                      {item.topic.images.map((image, imgIndex) => (
+                        <TouchableOpacity 
+                          key={imgIndex}
+                          onPress={() => image.source && Linking.openURL(image.source)}
+                          style={styles.imageContainer}
+                        >
+                          <Image 
+                            source={{ uri: image.thumbnail || image.url }}
+                            style={styles.sourceImage}
+                            resizeMode="cover"
+                          />
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  ) : null}
+                  
+                  <View style={styles.cardActions}>
                     <View style={styles.sourceButtonsContainer}>
-                      {item.topic.sources && item.topic.sources.slice(0, 2).map((source: string, index: number) => (
+                      {item.topic.sources && item.topic.sources.slice(0, 3).map((source: string, index: number) => (
                         <TouchableOpacity 
                           key={index}
                           style={styles.sourceButton}
@@ -792,7 +807,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                           </Text>
                         </TouchableOpacity>
                       ))}
-                      {item.topic.sources && item.topic.sources.length > 2 && (
+                      {item.topic.sources && item.topic.sources.length > 3 && (
                         <TouchableOpacity 
                           style={styles.sourceButton}
                           onPress={() => {
@@ -806,37 +821,10 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                             );
                           }}
                         >
-                          <Text style={styles.sourceButtonText}>+{item.topic.sources.length - 2}</Text>
+                          <Text style={styles.sourceButtonText}>+{item.topic.sources.length - 3}</Text>
                         </TouchableOpacity>
                       )}
                     </View>
-                    <Text style={styles.timeAgo}>Now</Text>
-                  </View>
-                  <Text style={styles.artistName}>{item.stan.name}</Text>
-                  <Text style={styles.topicTitle}>{generateShortTitle(item.topic.title, item.topic.content)}</Text>
-                  <Text style={styles.topicContent}>{item.topic.content}</Text>
-                  
-                  {/* Image carousel for topic */}
-                  <ImageCarousel images={item.topic.images || []} />
-                  
-                  <View style={styles.cardActions}>
-                    {item.topic.sources && item.topic.sources.length > 0 && (
-                      <TouchableOpacity 
-                        style={styles.viewSourcesButton}
-                        onPress={() => {
-                          Alert.alert(
-                            'Sources',
-                            item.topic.sources?.map((source: string, i: number) => `${i + 1}. ${source}`).join('\n\n') || 'No sources available',
-                            [
-                              { text: 'Cancel' },
-                              { text: 'Open First Source', onPress: () => item.topic.sources?.[0] && Linking.openURL(item.topic.sources[0]) }
-                            ]
-                          );
-                        }}
-                      >
-                        <Text style={styles.actionButtonText}>View Sources</Text>
-                      </TouchableOpacity>
-                    )}
                   </View>
                 </LinearGradient>
               </View>

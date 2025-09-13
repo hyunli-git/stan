@@ -64,6 +64,20 @@ const extractImagesFromSources = async (sources: string[]): Promise<any[]> => {
           thumbnail: `https://via.placeholder.com/200x300/000000/ffffff?text=TikTok`
         });
       }
+      // For news articles and other sites, use a generic placeholder with favicon
+      else if (source.startsWith('http')) {
+        try {
+          const domain = new URL(source).hostname;
+          images.push({
+            url: `https://via.placeholder.com/400x300/4A90E2/ffffff?text=📰+Article`,
+            alt: `Article from ${domain}`,
+            source: source,
+            thumbnail: `https://via.placeholder.com/200x150/4A90E2/ffffff?text=📰`
+          });
+        } catch (urlError) {
+          // Skip invalid URLs
+        }
+      }
     } catch (error) {
       console.error(`Error extracting image from ${source}:`, error);
     }
