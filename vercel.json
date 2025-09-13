@@ -1,0 +1,6 @@
+{
+  "buildCommand": "cd stan-backend && npm run build",
+  "outputDirectory": "stan-backend/.next",
+  "installCommand": "cd stan-backend && npm install",
+  "rootDirectory": "stan-backend"
+}
