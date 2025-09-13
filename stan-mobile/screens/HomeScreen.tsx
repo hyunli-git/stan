@@ -744,11 +744,12 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 >
                   <View style={styles.cardMeta}>
                     <Text style={styles.sourceCount}>
-                      {item.topic.sources?.length || 0} SOURCES • {item.stan.name}
+                      {item.topic.sources?.length || 0} SOURCES
                     </Text>
                     <Text style={styles.timeAgo}>Now</Text>
                   </View>
-                  <Text style={styles.topicTitle}>{item.topic.title}</Text>
+                  <Text style={styles.artistName}>{item.stan.name}</Text>
+                  <Text style={styles.topicTitle}>{generateShortTitle(item.topic.title, item.topic.content)}</Text>
                   <Text style={styles.topicContent}>{item.topic.content}</Text>
                   
                   {/* Image carousel for topic */}

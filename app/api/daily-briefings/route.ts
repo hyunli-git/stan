@@ -208,11 +208,28 @@ IMPORTANT:
       console.error('Parse error:', parseError);
     }
 
-    // Fallback
+    // Fallback - clean up content before showing
+    let cleanContent = content;
+    try {
+      // If it looks like JSON, try to extract readable content
+      if (content.trim().startsWith('{') && content.includes('content')) {
+        const contentMatch = content.match(/"content":\s*"([^"]+)"/);
+        if (contentMatch) {
+          cleanContent = contentMatch[1].replace(/\\n/g, ' ').replace(/\\/g, '');
+        }
+      }
+    } catch (e) {
+      // If extraction fails, just clean up the raw content
+      cleanContent = content.replace(/[{}"\[\]]/g, ' ')
+        .replace(/content:|title:|sources:/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+    
     return {
       topics: [{
-        title: "📰 Today's Update",
-        content: content.substring(0, 200) + "...",
+        title: "📰 Latest Update",
+        content: cleanContent.substring(0, 150) + "...",
         sources: []
       }],
       searchSources: [],
