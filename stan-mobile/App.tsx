@@ -92,7 +92,14 @@ function AppNavigator() {
             {isNewUser ? (
               // New users see onboarding first
               <>
-                <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+                <Stack.Screen 
+                  name="Onboarding" 
+                  component={OnboardingScreen}
+                  options={{
+                    presentation: 'card',
+                    gestureEnabled: false,
+                  }}
+                />
                 <Stack.Screen name="MainTabs" component={MainTabs} />
                 <Stack.Screen name="Briefing" component={BriefingScreen} />
                 <Stack.Screen name="PromptManager" component={PromptManagerScreen} />
@@ -102,7 +109,14 @@ function AppNavigator() {
               // Returning users go directly to MainTabs
               <>
                 <Stack.Screen name="MainTabs" component={MainTabs} />
-                <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+                <Stack.Screen 
+                  name="Onboarding" 
+                  component={OnboardingScreen}
+                  options={{
+                    presentation: 'card',
+                    gestureEnabled: false,
+                  }}
+                />
                 <Stack.Screen name="Briefing" component={BriefingScreen} />
                 <Stack.Screen name="PromptManager" component={PromptManagerScreen} />
                 <Stack.Screen name="TestApp" component={TestApp} />

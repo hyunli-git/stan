@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STAN - Daily Briefings Preview</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+        }
+        .header {
+            background: white;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .logo {
+            width: 40px;
+            height: 40px;
+        }
+        .title {
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .subtitle {
+            color: #666;
+            margin-top: 5px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .briefing-card {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .card-gradient {
+            padding: 20px;
+            color: white;
+            min-height: 180px;
+        }
+        .card-meta {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 12px;
+            opacity: 0.9;
+        }
+        .topic-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .topic-content {
+            font-size: 15px;
+            line-height: 1.5;
+            margin-bottom: 15px;
+        }
+        .image-carousel {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            margin: 15px 0;
+            padding-bottom: 10px;
+        }
+        .image-carousel img {
+            width: 120px;
+            height: 80px;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+        .card-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .view-sources {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            padding: 8px 16px;
+            border-radius: 20px;
+            color: white;
+            text-decoration: none;
+            font-size: 13px;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .error {
+            background: #fee;
+            color: #c00;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <div class="logo-section">
+                <img src="/stan-logo.png" alt="STAN" class="logo">
+                <span class="title">STAN</span>
+            </div>
+            <div class="subtitle">Your Daily Briefings</div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div id="briefings-container" class="loading">
+            Loading briefings...
+        </div>
+    </div>
+
+    <script>
+        async function loadBriefings() {
+            const container = document.getElementById('briefings-container');
+            
+            try {
+                // Fetch sample briefings
+                const response = await fetch('/api/sample-briefings');
+                const data = await response.json();
+                
+                if (!data.briefings || data.briefings.length === 0) {
+                    container.innerHTML = '<div class="error">No briefings available</div>';
+                    return;
+                }
+                
+                container.innerHTML = '';
+                
+                // Render each briefing
+                data.briefings.forEach(briefing => {
+                    const stan = briefing.stans;
+                    const categoryColors = {
+                        'K-Pop': ['#667eea', '#764ba2'],
+                        'Music': ['#f093fb', '#f5576c'],
+                        'Sports': ['#4facfe', '#00f2fe'],
+                        'Gaming': ['#43e97b', '#38f9d7'],
+                        'Movies & TV': ['#fa709a', '#fee140']
+                    };
+                    
+                    const colors = categoryColors[stan.categories.name] || ['#667eea', '#764ba2'];
+                    
+                    briefing.topics.forEach(topic => {
+                        const card = document.createElement('div');
+                        card.className = 'briefing-card';
+                        
+                        card.innerHTML = `
+                            <div class="card-gradient" style="background: linear-gradient(135deg, ${colors[0]}, ${colors[1]})">
+                                <div class="card-meta">
+                                    <span>${topic.sources ? topic.sources.length : 0} SOURCES • ${stan.name}</span>
+                                    <span>Now</span>
+                                </div>
+                                <div class="topic-title">${topic.title}</div>
+                                <div class="topic-content">${topic.content}</div>
+                                ${topic.images && topic.images.length > 0 ? `
+                                    <div class="image-carousel">
+                                        ${topic.images.map(img => `
+                                            <img src="${img.thumbnail || img.url}" alt="${img.alt}" />
+                                        `).join('')}
+                                    </div>
+                                ` : ''}
+                                <div class="card-actions">
+                                    ${topic.sources && topic.sources.length > 0 ? `
+                                        <a href="${topic.sources[0]}" target="_blank" class="view-sources">View Sources</a>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        `;
+                        
+                        container.appendChild(card);
+                    });
+                });
+                
+            } catch (error) {
+                console.error('Error loading briefings:', error);
+                container.innerHTML = `<div class="error">Error loading briefings: ${error.message}</div>`;
+            }
+        }
+        
+        // Load briefings on page load
+        loadBriefings();
+    </script>
+</body>
+</html>
