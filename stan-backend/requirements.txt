@@ -1,0 +1,28 @@
+# Modern requirements with latest AI models
+# Core AI - Updated to latest Gemini
+google-generativeai>=0.8.3
+
+# Web Framework with streaming support
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+sse-starlette>=2.1.0
+
+# Database
+supabase>=2.7.0
+
+# Environment
+python-dotenv>=1.0.1
+
+# Essential dependencies
+pydantic>=2.9.0
+httpx>=0.28.1
+aiohttp>=3.10.5
+
+# Performance & Caching (optional)
+redis>=5.0.0
+
+# Media processing for multimodal (optional)
+Pillow>=10.0.0
+
+# Analytics
+prometheus-client>=0.20.0

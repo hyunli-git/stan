@@ -15,13 +15,15 @@ interface BriefingContent {
   sources: string[];
 }
 
+import { API_URL } from '../config/api';
+
 export const generateAIBriefingWithWebSearch = async (stan: Stan): Promise<BriefingContent> => {
   try {
     console.log('🔄 Calling STAN backend API for:', stan.name);
-    console.log('🔄 API URL:', 'http://10.0.0.211:3000/api/generate-briefing');
+    console.log('🔄 API URL:', `${API_URL}/api/generate-briefing`);
     console.log('🔄 Request body:', JSON.stringify({ stan }));
     
-    const response = await fetch('http://10.0.0.211:3000/api/generate-briefing', {
+    const response = await fetch(`${API_URL}/api/generate-briefing`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

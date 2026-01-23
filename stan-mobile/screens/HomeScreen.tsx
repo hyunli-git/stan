@@ -19,6 +19,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { AppleMusicTheme, getGradientColors } from '../styles/AppleMusicTheme';
+import LocalStorageService from '../services/localStorageService';
 // Import removed - using daily briefings API instead
 
 interface Stan {
@@ -176,7 +177,7 @@ const ImageCarousel = ({ images }: { images: ImageData[] }) => {
 };
 
 export default function HomeScreen({ navigation }: HomeScreenProps) {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isAnonymous } = useAuth();
   const [briefingCards, setBriefingCards] = useState<BriefingCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -214,14 +215,61 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const loadStansAndGenerateBriefings = async () => {
     setLoading(true);
     try {
-      const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://stan-peach.vercel.app';
+      const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://stan-backend-7btyucqrz-haleys-projects-1932fed0.vercel.app';
       
-      // Only fetch briefings if user is logged in
       let data;
       let userFollowedStans: string[] = [];
       
-      if (user?.id) {
-        // First, get the user's actual followed stans for double-check filtering
+      if (isAnonymous) {
+        // Handle anonymous users - load from local storage
+        console.log('👻 Anonymous user - loading from local storage');
+        const localStans = await LocalStorageService.getStans();
+        userFollowedStans = localStans.map(s => s.name);
+        console.log(`👻 Anonymous user follows these stans:`, userFollowedStans);
+        
+        if (localStans.length === 0) {
+          // No stans yet - show onboarding state
+          setBriefingCards([]);
+          setStans([]);
+          setLoading(false);
+          return;
+        }
+        
+        // Create mock briefing cards for anonymous users
+        // For now, just show the stans they follow without actual briefings
+        const mockCards: BriefingCard[] = localStans.map(stan => ({
+          id: stan.id,
+          stanName: stan.name,
+          category: stan.category,
+          categoryIcon: '⭐', // Default icon
+          gradientColors: getGradientColors(stan.category),
+          topics: [{
+            title: `Welcome to ${stan.name}!`,
+            content: `You're now following ${stan.name}. Daily briefings will appear here with the latest updates and news!`,
+            sources: [],
+            images: []
+          }],
+          sources: [],
+          images: [],
+          lastGenerated: new Date().toISOString().split('T')[0]
+        }));
+        
+        setBriefingCards(mockCards);
+        setStans(localStans.map(ls => ({
+          id: ls.id,
+          name: ls.name,
+          description: ls.description,
+          priority: 1,
+          created_at: ls.created_at,
+          categories: {
+            name: ls.category,
+            icon: '⭐',
+            color: '#4ECDC4'
+          }
+        })));
+        
+      } else if (user?.id) {
+        // Handle logged-in users
         console.log(`👤 Fetching user's followed stans: ${user.id}`);
         try {
           const { data: followedStansData, error } = await supabase
@@ -427,7 +475,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       setTimeout(async () => {
         console.log('⏰ Auto-triggering briefing generation...');
         try {
-          const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://stan-peach.vercel.app';
+          const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://stan-backend-7btyucqrz-haleys-projects-1932fed0.vercel.app';
           const genResponse = await fetch(`${backendUrl}/api/force-generate-briefings`, {
             method: 'POST',
             headers: {

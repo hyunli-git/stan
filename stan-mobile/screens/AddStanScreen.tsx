@@ -6,15 +6,18 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   FlatList,
-  ScrollView,
   SafeAreaView,
+  StatusBar,
+  Dimensions,
+  Platform,
+  Pressable,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { AppleMusicTheme } from '../styles/AppleMusicTheme';
+import LocalStorageService from '../services/localStorageService';
+
+const { width } = Dimensions.get('window');
 
 interface Category {
   id: string;
@@ -42,103 +45,78 @@ const SEARCH_DATABASE: StanSuggestion[] = [
   // K-Pop & Entertainment
   { id: '1', name: 'BTS', category: 'K-Pop', categoryIcon: '🎵', categoryColor: '#FF6B6B', description: 'Global superstars breaking barriers worldwide' },
   { id: '2', name: 'BLACKPINK', category: 'K-Pop', categoryIcon: '🎵', categoryColor: '#FF6B6B', description: 'Queens of K-Pop with killer fashion and music' },
-  { id: '16', name: 'K-Pop Demon Hunters', category: 'Movies & TV', categoryIcon: '🎬', categoryColor: '#F9F871', description: 'Netflix\'s biggest movie ever - K-Pop girl group fights demons!' },
   { id: '17', name: 'aespa', category: 'K-Pop', categoryIcon: '🎵', categoryColor: '#FF6B6B', description: 'Next-generation K-Pop with virtual avatars' },
   { id: '18', name: 'TWICE', category: 'K-Pop', categoryIcon: '🎵', categoryColor: '#FF6B6B', description: 'Feel-good K-Pop with infectious energy' },
   { id: '19', name: 'IVE', category: 'K-Pop', categoryIcon: '🎵', categoryColor: '#FF6B6B', description: 'Rising stars with elegant concepts' },
   { id: '20', name: 'NewJeans', category: 'K-Pop', categoryIcon: '🎵', categoryColor: '#FF6B6B', description: 'Y2K-inspired fresh K-Pop sound' },
   { id: '21', name: 'ITZY', category: 'K-Pop', categoryIcon: '🎵', categoryColor: '#FF6B6B', description: 'Teen crush with powerful performances' },
   
-  // Music - Western
-  { id: '3', name: 'Taylor Swift', category: 'Music', categoryIcon: '🎸', categoryColor: '#C34A36', description: 'Storytelling genius breaking records with every era' },
-  { id: '4', name: 'Bad Bunny', category: 'Music', categoryIcon: '🎸', categoryColor: '#C34A36', description: 'Reggaeton king bringing Latin music to the world' },
-  { id: '5', name: 'Tyler, the Creator', category: 'Music', categoryIcon: '🎸', categoryColor: '#C34A36', description: 'Creative visionary pushing boundaries in music and fashion' },
-  { id: '22', name: 'Drake', category: 'Music', categoryIcon: '🎸', categoryColor: '#C34A36', description: 'Hip-hop icon dominating charts for over a decade' },
-  { id: '23', name: 'Billie Eilish', category: 'Music', categoryIcon: '🎸', categoryColor: '#C34A36', description: 'Genre-defying artist with haunting melodies' },
-  { id: '24', name: 'The Weeknd', category: 'Music', categoryIcon: '🎸', categoryColor: '#C34A36', description: 'Dark R&B master with cinematic sound' },
-  { id: '25', name: 'Dua Lipa', category: 'Music', categoryIcon: '🎸', categoryColor: '#C34A36', description: 'Pop perfection with disco-influenced hits' },
-  { id: '26', name: 'Harry Styles', category: 'Music', categoryIcon: '🎸', categoryColor: '#C34A36', description: 'Solo superstar with genre-blending artistry' },
-  { id: '27', name: 'Olivia Rodrigo', category: 'Music', categoryIcon: '🎸', categoryColor: '#C34A36', description: 'Gen Z songwriter capturing teenage emotions' },
+  // Artists & Music
+  { id: '3', name: 'Taylor Swift', category: 'Music', categoryIcon: '🎤', categoryColor: '#4ECDC4', description: 'Pop icon with storytelling mastery' },
+  { id: '4', name: 'Drake', category: 'Music', categoryIcon: '🎤', categoryColor: '#4ECDC4', description: 'Chart-topping rapper and cultural icon' },
+  { id: '22', name: 'Olivia Rodrigo', category: 'Music', categoryIcon: '🎤', categoryColor: '#4ECDC4', description: 'Pop-rock sensation with emotional depth' },
+  { id: '23', name: 'Billie Eilish', category: 'Music', categoryIcon: '🎤', categoryColor: '#4ECDC4', description: 'Unique sound and visual aesthetic' },
+  { id: '24', name: 'The Weeknd', category: 'Music', categoryIcon: '🎤', categoryColor: '#4ECDC4', description: 'R&B superstar with dark pop vibes' },
+  
+  // Entertainment & Movies
+  { id: '5', name: 'Marvel Studios', category: 'Movies & TV', categoryIcon: '🎬', categoryColor: '#F9F871', description: 'Superhero universe dominating cinema' },
+  { id: '6', name: 'Stranger Things', category: 'Movies & TV', categoryIcon: '🎬', categoryColor: '#F9F871', description: '80s nostalgia with supernatural thrills' },
+  { id: '16', name: 'K-Pop Demon Hunters', category: 'Movies & TV', categoryIcon: '🎬', categoryColor: '#F9F871', description: 'Netflix\'s biggest movie ever - K-Pop girl group fights demons!' },
+  { id: '25', name: 'Wednesday', category: 'Movies & TV', categoryIcon: '🎬', categoryColor: '#F9F871', description: 'Dark comedy series taking over social media' },
+  { id: '26', name: 'House of the Dragon', category: 'Movies & TV', categoryIcon: '🎬', categoryColor: '#F9F871', description: 'Epic fantasy drama successor to GoT' },
   
   // Sports
-  { id: '6', name: 'Los Angeles Lakers', category: 'Sports', categoryIcon: '⚽', categoryColor: '#4ECDC4', description: 'Purple and Gold legends with championship legacy' },
-  { id: '7', name: 'Real Madrid', category: 'Sports', categoryIcon: '⚽', categoryColor: '#4ECDC4', description: 'Los Blancos - the most successful club in football' },
-  { id: '8', name: 'Manchester United', category: 'Sports', categoryIcon: '⚽', categoryColor: '#4ECDC4', description: 'Red Devils with massive global fanbase' },
-  { id: '9', name: 'Dallas Cowboys', category: 'Sports', categoryIcon: '⚽', categoryColor: '#4ECDC4', description: 'America\'s Team with star power' },
-  { id: '10', name: 'New York Yankees', category: 'Sports', categoryIcon: '⚽', categoryColor: '#4ECDC4', description: '27-time World Series champions' },
-  { id: '11', name: 'Toronto Blue Jays', category: 'Sports', categoryIcon: '⚽', categoryColor: '#4ECDC4', description: 'Canada\'s team with passionate fans and exciting young talent' },
-  { id: '28', name: 'Golden State Warriors', category: 'Sports', categoryIcon: '⚽', categoryColor: '#4ECDC4', description: 'Dynasty team revolutionizing basketball' },
-  { id: '29', name: 'Barcelona', category: 'Sports', categoryIcon: '⚽', categoryColor: '#4ECDC4', description: 'Més que un club - more than a club' },
-  { id: '30', name: 'Arsenal', category: 'Sports', categoryIcon: '⚽', categoryColor: '#4ECDC4', description: 'The Gunners with beautiful football philosophy' },
-  { id: '31', name: 'Chelsea', category: 'Sports', categoryIcon: '⚽', categoryColor: '#4ECDC4', description: 'London Blues with European success' },
-  { id: '32', name: 'Liverpool', category: 'Sports', categoryIcon: '⚽', categoryColor: '#4ECDC4', description: 'You\'ll Never Walk Alone - Anfield legends' },
+  { id: '7', name: 'Lionel Messi', category: 'Sports', categoryIcon: '⚽', categoryColor: '#95E1D3', description: 'Football legend and Inter Miami star' },
+  { id: '8', name: 'LeBron James', category: 'Sports', categoryIcon: '🏀', categoryColor: '#95E1D3', description: 'Basketball king and cultural influence' },
+  { id: '27', name: 'Cristiano Ronaldo', category: 'Sports', categoryIcon: '⚽', categoryColor: '#95E1D3', description: 'Global football icon and social media king' },
+  { id: '28', name: 'Serena Williams', category: 'Sports', categoryIcon: '🎾', categoryColor: '#95E1D3', description: 'Tennis legend and empowerment advocate' },
+  { id: '29', name: 'Stephen Curry', category: 'Sports', categoryIcon: '🏀', categoryColor: '#95E1D3', description: 'Revolutionary basketball player changing the game' },
   
-  // Gaming
-  { id: '12', name: 'League of Legends', category: 'Gaming', categoryIcon: '🎮', categoryColor: '#845EC2', description: 'The world\'s biggest esport with epic competitions' },
-  { id: '13', name: 'Valorant', category: 'Gaming', categoryIcon: '🎮', categoryColor: '#845EC2', description: 'Tactical shooter taking esports by storm' },
-  { id: '14', name: 'Fortnite', category: 'Gaming', categoryIcon: '🎮', categoryColor: '#845EC2', description: 'Battle royale phenomenon with constant updates' },
-  { id: '15', name: 'Minecraft', category: 'Gaming', categoryIcon: '🎮', categoryColor: '#845EC2', description: 'Infinite creativity in blocky worlds' },
-  { id: '33', name: 'Call of Duty', category: 'Gaming', categoryIcon: '🎮', categoryColor: '#845EC2', description: 'FPS franchise with massive tournaments' },
-  { id: '34', name: 'Among Us', category: 'Gaming', categoryIcon: '🎮', categoryColor: '#845EC2', description: 'Social deduction game that took the world by storm' },
-  { id: '35', name: 'Genshin Impact', category: 'Gaming', categoryIcon: '🎮', categoryColor: '#845EC2', description: 'Open-world RPG with anime aesthetics' },
+  // Gaming & Tech
+  { id: '9', name: 'Pokémon', category: 'Gaming', categoryIcon: '🎮', categoryColor: '#A8E6CF', description: 'Beloved franchise spanning games, shows, and movies' },
+  { id: '10', name: 'Fortnite', category: 'Gaming', categoryIcon: '🎮', categoryColor: '#A8E6CF', description: 'Battle royale phenomenon with constant updates' },
+  { id: '30', name: 'Genshin Impact', category: 'Gaming', categoryIcon: '🎮', categoryColor: '#A8E6CF', description: 'Open-world RPG with stunning visuals' },
+  { id: '31', name: 'Minecraft', category: 'Gaming', categoryIcon: '🎮', categoryColor: '#A8E6CF', description: 'Creative sandbox game loved by all ages' },
+  { id: '32', name: 'League of Legends', category: 'Gaming', categoryIcon: '🎮', categoryColor: '#A8E6CF', description: 'Competitive MOBA with global esports scene' },
   
-  // Movies & TV
-  { id: '36', name: 'Marvel Cinematic Universe', category: 'Movies & TV', categoryIcon: '🎬', categoryColor: '#F9F871', description: 'Superhero franchise connecting movies and shows' },
-  { id: '37', name: 'Stranger Things', category: 'Movies & TV', categoryIcon: '🎬', categoryColor: '#F9F871', description: 'Netflix sci-fi hit with 80s nostalgia' },
-  { id: '38', name: 'Wednesday', category: 'Movies & TV', categoryIcon: '🎬', categoryColor: '#F9F871', description: 'Addams Family spinoff with viral dance' },
-  { id: '39', name: 'House of the Dragon', category: 'Movies & TV', categoryIcon: '🎬', categoryColor: '#F9F871', description: 'Game of Thrones prequel with dragons' },
-  { id: '40', name: 'The Batman', category: 'Movies & TV', categoryIcon: '🎬', categoryColor: '#F9F871', description: 'Dark Knight\'s latest cinematic adventure' },
+  // Anime & Manga
+  { id: '11', name: 'Attack on Titan', category: 'Anime', categoryIcon: '🗾', categoryColor: '#FFB6C1', description: 'Epic dark fantasy anime with complex storytelling' },
+  { id: '12', name: 'One Piece', category: 'Anime', categoryIcon: '🗾', categoryColor: '#FFB6C1', description: 'Long-running adventure manga and anime series' },
+  { id: '33', name: 'Demon Slayer', category: 'Anime', categoryIcon: '🗾', categoryColor: '#FFB6C1', description: 'Breathtaking animation and emotional storytelling' },
+  { id: '34', name: 'Jujutsu Kaisen', category: 'Anime', categoryIcon: '🗾', categoryColor: '#FFB6C1', description: 'Modern supernatural action series' },
+  { id: '35', name: 'Chainsaw Man', category: 'Anime', categoryIcon: '🗾', categoryColor: '#FFB6C1', description: 'Dark supernatural series with cult following' },
   
-  // Content Creators
-  { id: '41', name: 'MrBeast', category: 'Content Creators', categoryIcon: '📱', categoryColor: '#FF9500', description: 'YouTube philanthropist with viral challenges' },
-  { id: '42', name: 'PewDiePie', category: 'Content Creators', categoryIcon: '📱', categoryColor: '#FF9500', description: 'Gaming legend and YouTube pioneer' },
-  { id: '43', name: 'Emma Chamberlain', category: 'Content Creators', categoryIcon: '📱', categoryColor: '#FF9500', description: 'Gen Z lifestyle influencer and coffee entrepreneur' },
-  { id: '44', name: 'Charli D\'Amelio', category: 'Content Creators', categoryIcon: '📱', categoryColor: '#FF9500', description: 'TikTok dancing queen with massive following' },
+  // Books & Literature
+  { id: '13', name: 'Colleen Hoover', category: 'Books', categoryIcon: '📚', categoryColor: '#DDA0DD', description: 'Romance novelist taking BookTok by storm' },
+  { id: '14', name: 'Harry Potter', category: 'Books', categoryIcon: '📚', categoryColor: '#DDA0DD', description: 'Magical world that defined a generation' },
+  { id: '36', name: 'Sarah J. Maas', category: 'Books', categoryIcon: '📚', categoryColor: '#DDA0DD', description: 'Fantasy romance author with devoted fanbase' },
+  { id: '37', name: 'BookTok', category: 'Books', categoryIcon: '📚', categoryColor: '#DDA0DD', description: 'TikTok book community driving reading trends' },
+  
+  // General Culture & Lifestyle
+  { id: '15', name: 'MrBeast', category: 'Content Creator', categoryIcon: '📱', categoryColor: '#87CEEB', description: 'YouTube philanthropy and entertainment empire' },
+  { id: '38', name: 'Emma Chamberlain', category: 'Content Creator', categoryIcon: '📱', categoryColor: '#87CEEB', description: 'Lifestyle influencer defining Gen Z aesthetics' },
+  { id: '39', name: 'Charli D\'Amelio', category: 'Content Creator', categoryIcon: '📱', categoryColor: '#87CEEB', description: 'TikTok dancing sensation and social media star' },
+  { id: '40', name: 'PewDiePie', category: 'Content Creator', categoryIcon: '📱', categoryColor: '#87CEEB', description: 'YouTube gaming legend with massive following' },
 ];
 
 export default function AddStanScreen({ navigation }: AddStanScreenProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
-  const [loadingCategories, setLoadingCategories] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredSuggestions, setFilteredSuggestions] = useState<StanSuggestion[]>([]);
   const [selectedStans, setSelectedStans] = useState<string[]>([]);
-  const [showSnackbar, setShowSnackbar] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
-  const { user } = useAuth();
-
-  // Debug navigation
-  useEffect(() => {
-    console.log('🧭 Navigation object:', navigation);
-    console.log('🧭 Navigation methods:', Object.keys(navigation));
-  }, [navigation]);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const { user, isAnonymous } = useAuth();
 
   useEffect(() => {
     loadCategories();
     loadUserFollowedStans();
-    // Show popular suggestions by default
-    setFilteredSuggestions(SEARCH_DATABASE.slice(0, 20));
+    setFilteredSuggestions(SEARCH_DATABASE);
   }, []);
 
   useEffect(() => {
-    if (searchQuery.trim().length > 0) {
-      const filtered = SEARCH_DATABASE.filter(suggestion =>
-        suggestion.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        suggestion.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        suggestion.description.toLowerCase().includes(searchQuery.toLowerCase())
-      ).slice(0, 15); // Limit to 15 results for better performance
-      
-      setFilteredSuggestions(filtered);
-    } else {
-      // Show all suggestions by default (popular stans)
-      setFilteredSuggestions(SEARCH_DATABASE.slice(0, 20)); // Show top 20 popular stans by default
-    }
-  }, [searchQuery]);
-
-  // Debug effect to track selection changes
-  useEffect(() => {
-    console.log('🔍 Selected stans changed:', selectedStans);
-  }, [selectedStans]);
+    filterSuggestions();
+  }, [searchQuery, selectedCategory]);
 
   const loadCategories = async () => {
     try {
@@ -161,26 +139,31 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
       }
     } catch (error) {
       console.error('Error loading categories:', error);
-    } finally {
-      setLoadingCategories(false);
     }
   };
 
   const loadUserFollowedStans = async () => {
-    if (!user?.id) return;
-    
     try {
       console.log('🔍 Loading user followed stans...');
-      const { data, error } = await supabase
-        .from('stans')
-        .select('name')
-        .eq('user_id', user.id)
-        .eq('is_active', true);
-
-      if (error) throw error;
+      let followedStanNames: string[] = [];
       
-      const followedStanNames = data?.map(stan => stan.name) || [];
-      console.log('👤 User follows:', followedStanNames);
+      if (isAnonymous) {
+        // Load from local storage for anonymous users
+        const localStans = await LocalStorageService.getStans();
+        followedStanNames = localStans.map(stan => stan.name);
+        console.log('👻 Anonymous user follows:', followedStanNames);
+      } else if (user?.id) {
+        // Load from Supabase for logged-in users
+        const { data, error } = await supabase
+          .from('stans')
+          .select('name')
+          .eq('user_id', user.id)
+          .eq('is_active', true);
+
+        if (error) throw error;
+        followedStanNames = data?.map(stan => stan.name) || [];
+        console.log('👤 Logged-in user follows:', followedStanNames);
+      }
       
       // Mark already followed stans as selected
       const preSelectedIds: string[] = [];
@@ -198,466 +181,264 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
     }
   };
 
+  const filterSuggestions = () => {
+    let filtered = SEARCH_DATABASE;
+
+    if (selectedCategory) {
+      filtered = filtered.filter(item => item.category === selectedCategory);
+    }
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(item =>
+        item.name.toLowerCase().includes(query) ||
+        item.category.toLowerCase().includes(query) ||
+        item.description.toLowerCase().includes(query)
+      );
+    }
+
+    setFilteredSuggestions(filtered);
+  };
+
   const toggleStanSelection = useCallback((suggestion: StanSuggestion) => {
-    console.log('🔄 toggleStanSelection called for:', suggestion.name, 'ID:', suggestion.id);
-    console.log('🔄 Current selected IDs:', selectedStans);
-    
-    setSelectedStans(prevSelected => {
-      const newSelection = [...prevSelected];
-      const index = newSelection.indexOf(suggestion.id);
+    console.log('🔄 [WEB-PRESSABLE] Toggling stan selection:', suggestion.name, 'ID:', suggestion.id);
+    setSelectedStans(prev => {
+      const newSelection = prev.includes(suggestion.id) 
+        ? prev.filter(id => id !== suggestion.id)
+        : [...prev, suggestion.id];
       
-      if (index > -1) {
-        console.log('🗑️ Removing from selection at index:', index);
-        newSelection.splice(index, 1);
-      } else {
-        console.log('➕ Adding to selection');
-        newSelection.push(suggestion.id);
-      }
-      
-      console.log('🔄 New selected IDs:', newSelection);
+      console.log('✅ Updated selection:', newSelection);
       return newSelection;
     });
   }, []);
 
-
-  const clearSelections = useCallback(() => {
-    console.log('🧼 Clearing all selections');
-    setSelectedStans([]);
-  }, []);
-
-  const selectAllVisible = useCallback(() => {
-    console.log('✅ Selecting all visible stans');
-    setSelectedStans(prevSelected => {
-      const newSelection = [...prevSelected];
-      filteredSuggestions.forEach(suggestion => {
-        if (!newSelection.includes(suggestion.id)) {
-          newSelection.push(suggestion.id);
-        }
-      });
-      return newSelection;
-    });
-  }, [filteredSuggestions]);
-
-  const handleAddStans = async () => {
-    console.log('🔄 handleAddStans called', { selectedCount: selectedStans.length, selectedIds: selectedStans });
-    console.log('🔄 User context:', user);
-    console.log('🔄 Categories loaded:', categories.length);
-    
-    if (!user) {
-      console.log('❌ No user found - redirecting to login');
-      Alert.alert('Authentication Required', 'Please log in to follow stans');
-      return;
-    }
-    
+  const handleFollowStans = async () => {
     if (selectedStans.length === 0) {
-      console.log('❌ No stans selected');
-      Alert.alert('Error', 'Please select at least one stan to follow');
-      return;
-    }
-    
-    // Get currently followed stans
-    const { data: currentStans } = await supabase
-      .from('stans')
-      .select('id, name')
-      .eq('user_id', user?.id)
-      .eq('is_active', true);
-    
-    const currentStanNames = currentStans?.map(s => s.name) || [];
-    const currentStanIds = currentStans?.map(s => s.id) || [];
-    
-    // Determine what to add and what to remove
-    const selectedSuggestions = SEARCH_DATABASE.filter(s => selectedStans.includes(s.id));
-    const selectedStanNames = selectedSuggestions.map(s => s.name);
-    
-    const newStansToAdd = selectedSuggestions.filter(s => !currentStanNames.includes(s.name));
-    const stansToRemove = currentStans?.filter(s => !selectedStanNames.includes(s.name)) || [];
-    
-    console.log('📋 Selected suggestions:', selectedStanNames);
-    console.log('📋 Currently following:', currentStanNames);
-    console.log('📋 New stans to add:', newStansToAdd.map(s => s.name));
-    console.log('📋 Stans to remove:', stansToRemove.map(s => s.name));
-    
-    if (newStansToAdd.length === 0 && stansToRemove.length === 0) {
-      Alert.alert('Info', 'No changes to make - selection matches your current following list!');
+      Alert.alert('Select Some Stans', 'Choose at least one person or topic to follow');
       return;
     }
 
     setLoading(true);
     try {
-      let addedCount = 0;
-      let removedCount = 0;
-      
-      // Remove unfollowed stans
-      if (stansToRemove.length > 0) {
-        console.log('🗑️ Removing unfollowed stans:', stansToRemove.map(s => s.name));
-        const { error: removeError } = await supabase
-          .from('stans')
-          .delete()
-          .in('id', stansToRemove.map(s => s.id));
-          
-        if (removeError) {
-          console.error('❌ Error removing stans:', removeError);
-          throw removeError;
+      const selectedSuggestions = SEARCH_DATABASE.filter(s => selectedStans.includes(s.id));
+
+      if (isAnonymous) {
+        // Handle anonymous users - save to local storage
+        const localStans = await LocalStorageService.getStans();
+        const localStanNames = localStans.map(s => s.name);
+        
+        let addedCount = 0;
+        for (const suggestion of selectedSuggestions) {
+          if (!localStanNames.includes(suggestion.name)) {
+            await LocalStorageService.addStan({
+              name: suggestion.name,
+              description: suggestion.description,
+              category: suggestion.category,
+              category_id: suggestion.categoryId || '',
+              is_active: true,
+            });
+            addedCount++;
+          }
         }
         
-        removedCount = stansToRemove.length;
-        console.log('✅ Successfully removed', removedCount, 'stans');
-      }
-      
-      // Add new stans
-      if (newStansToAdd.length > 0) {
-        // Find or create categories for the new stans to add
-        const stansToAdd = await Promise.all(newStansToAdd.map(async (suggestion) => {
-          // Try to find existing category by name
-          let categoryId = suggestion.categoryId;
-          
-          if (!categoryId) {
-            // Find category by name
-            const existingCategory = categories.find(cat => 
-              cat.name.toLowerCase() === suggestion.category.toLowerCase()
-            );
-            
-            if (existingCategory) {
-              categoryId = existingCategory.id;
-            } else {
-              // Create new category if it doesn't exist
-              const { data: newCategory, error: categoryError } = await supabase
-                .from('categories')
-                .insert({
-                  name: suggestion.category,
-                  icon: suggestion.categoryIcon || '📌',
-                  color: suggestion.categoryColor || '#6B46C1'
-                })
-                .select()
-                .single();
-              
-              if (categoryError) throw categoryError;
-              categoryId = newCategory.id;
-            }
-          }
-          
-          return {
-            user_id: user?.id,
-            category_id: categoryId,
+        Alert.alert(
+          'Success! ✨',
+          `Added ${addedCount} new stan${addedCount !== 1 ? 's' : ''} to your list!`,
+          [{ text: 'Continue', onPress: () => navigation.navigate('Home') }]
+        );
+      } else if (user?.id) {
+        // Handle logged-in users
+        const { data: currentStans } = await supabase
+          .from('stans')
+          .select('id, name')
+          .eq('user_id', user.id)
+          .eq('is_active', true);
+
+        const currentStanNames = currentStans?.map(s => s.name) || [];
+        const newStansToAdd = selectedSuggestions.filter(s => !currentStanNames.includes(s.name));
+        const stansToRemove = currentStans?.filter(s => !selectedSuggestions.map(sel => sel.name).includes(s.name)) || [];
+
+        if (stansToRemove.length > 0) {
+          await supabase
+            .from('stans')
+            .delete()
+            .in('id', stansToRemove.map(s => s.id));
+        }
+
+        if (newStansToAdd.length > 0) {
+          const stansToInsert = newStansToAdd.map(suggestion => ({
+            user_id: user.id,
             name: suggestion.name,
             description: suggestion.description,
-            priority: 3,
-          };
-        }));
+            category_id: suggestion.categoryId || '',
+            is_active: true,
+            priority: 1,
+          }));
 
-        console.log('💾 Attempting to insert stans:', stansToAdd);
-        const { data, error } = await supabase
-          .from('stans')
-          .insert(stansToAdd)
-          .select();
-
-        console.log('💾 Database insert result:', { data, error });
-
-        if (error) {
-          console.error('❌ Database error:', error);
-          throw error;
+          await supabase.from('stans').insert(stansToInsert);
         }
 
-        addedCount = data?.length || newStansToAdd.length;
-        console.log('✅ Successfully added stans:', addedCount);
+        Alert.alert(
+          'Perfect! ✨',
+          `Updated your stan list successfully!`,
+          [{ text: 'Continue', onPress: () => navigation.navigate('Home') }]
+        );
       }
-      
-      console.log('✅ Changes completed - Added:', addedCount, 'Removed:', removedCount);
-      
-      // Keep current selections as they now reflect the updated following list
-      console.log('🧹 Clearing search query only');
-      setSearchQuery('');
-      
-      // Reload user stans to update the selection display
-      await loadUserFollowedStans();
-      
-      // Show snackbar notification
-      setSnackbarMessage('Your stans updated');
-      setShowSnackbar(true);
-      
-      // Auto-hide snackbar and redirect after 2 seconds
-      setTimeout(() => {
-        setShowSnackbar(false);
-        // Attempt navigation to Home after snackbar
-        try {
-          const parent = navigation.getParent();
-          if (parent && parent.navigate) {
-            parent.navigate('Home');
-          } else if (navigation.jumpTo) {
-            navigation.jumpTo('Home');
-          } else {
-            navigation.navigate('MainTabs', { 
-              screen: 'Home',
-              params: { refresh: true }
-            });
-          }
-          console.log('✅ Post-snackbar navigation to Home initiated');
-        } catch (navError) {
-          console.log('❌ Post-snackbar navigation failed:', navError);
-        }
-      }, 2000);
-    } catch (error: any) {
-      console.error('❌ Error in handleAddStans:', error);
-      console.error('❌ Error stack:', error.stack);
-      
-      let errorMessage = error.message || 'Failed to update stans';
-      if (errorMessage.includes('duplicate')) {
-        errorMessage = 'Some of these stans are already in your list!';
-      }
-      
-      Alert.alert('Error', errorMessage);
-      console.log('🚫 Error alert shown, not navigating');
+    } catch (error) {
+      console.error('Error updating stans:', error);
+      Alert.alert('Error', 'Something went wrong. Please try again.');
     } finally {
-      console.log('🏁 Finally block - setting loading to false');
       setLoading(false);
     }
   };
 
 
-  const renderSuggestion = ({ item }: { item: StanSuggestion }) => {
+  const renderSuggestionCard = ({ item }: { item: StanSuggestion }) => {
     const isSelected = selectedStans.includes(item.id);
-    console.log('🎨 Rendering:', item.name, 'Selected:', isSelected, 'ID:', item.id, 'Selected array:', selectedStans);
-    
-    const handlePress = () => {
-      console.log('👆 Pressed:', item.name, 'Current state:', selectedStans);
-      
-      setSelectedStans(current => {
-        const newSelection = [...current];
-        const index = newSelection.indexOf(item.id);
-        
-        if (index > -1) {
-          console.log('🗑️ Direct remove from selection');
-          newSelection.splice(index, 1);
-        } else {
-          console.log('➕ Direct add to selection');
-          newSelection.push(item.id);
-        }
-        
-        console.log('🔄 Direct new selected IDs:', newSelection);
-        return newSelection;
-      });
-    };
     
     return (
-      <TouchableOpacity
+      <View
         style={[
-          styles.suggestionCard, 
-          { borderLeftColor: item.categoryColor },
+          styles.suggestionCard,
           isSelected && styles.suggestionCardSelected
         ]}
-        onPress={handlePress}
-        activeOpacity={0.7}
       >
-        <View style={styles.suggestionInfo}>
-          <View style={[styles.suggestionIcon, { backgroundColor: item.categoryColor + '15' }]}>
-            <Text style={styles.suggestionIconText}>{item.categoryIcon}</Text>
+        <TouchableOpacity
+          style={styles.suggestionTouchable}
+          onPress={() => {
+            console.log('📱 [WEB-FIX] Card pressed:', item.name);
+            toggleStanSelection(item);
+          }}
+          activeOpacity={0.8}
+        >
+        <View style={styles.suggestionContent}>
+          <View style={styles.suggestionHeader}>
+            <View style={[styles.categoryBadge, { backgroundColor: item.categoryColor + '20' }]}>
+              <Text style={styles.categoryBadgeIcon}>{item.categoryIcon}</Text>
+              <Text style={[styles.categoryBadgeText, { color: item.categoryColor }]}>
+                {item.category}
+              </Text>
+            </View>
+            <View style={[styles.checkCircle, isSelected && styles.checkCircleSelected]}>
+              {isSelected && <Text style={styles.checkMark}>✓</Text>}
+            </View>
           </View>
-          <View style={styles.suggestionText}>
-            <Text style={styles.suggestionName}>{item.name}</Text>
-            <Text style={styles.suggestionCategory}>{item.category}</Text>
-          </View>
+          
+          <Text style={styles.suggestionName}>{item.name}</Text>
+          <Text style={styles.suggestionDescription}>{item.description}</Text>
         </View>
-        <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-          {isSelected && <Text style={styles.checkmark}>✓</Text>}
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </View>
     );
   };
 
-  if (loadingCategories) {
-    return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <Text style={styles.title}>🌟 STAN</Text>
-        <Text style={styles.loadingText}>Loading categories...</Text>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
-        style={styles.keyboardContainer} 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+      
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Text style={styles.backButtonText}>✕</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Follow Your Interests (Web Fixed)</Text>
+        <View style={styles.placeholder} />
+      </View>
+
+      {/* Subtitle */}
+      <Text style={styles.subtitle}>
+        Choose topics and people you'd like daily updates about
+      </Text>
+
+      {/* Search */}
+      <View style={styles.searchContainer}>
+        <Text style={styles.searchIcon}>🔍</Text>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search for anyone or anything..."
+          placeholderTextColor="#999"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </View>
+
+      {/* Category Filter */}
+      <ScrollView
+        horizontal
+        style={styles.categoryScrollContainer}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.categoryContainer}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton} 
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.backButtonText}>← Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>Add New Stan</Text>
-          <Text style={styles.subtitle}>
-            Who or what do you want to follow?
+        <TouchableOpacity
+          style={[
+            styles.categoryChip,
+            selectedCategory === null && styles.categoryChipSelected
+          ]}
+          onPress={() => {
+            console.log('🏷️ All category pressed');
+            setSelectedCategory(null);
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.categoryChipText, selectedCategory === null && styles.categoryChipTextSelected]}>
+            All
           </Text>
-        </View>
+        </TouchableOpacity>
+        
+        {[...new Set(SEARCH_DATABASE.map(item => item.category))].map((category) => {
+          const suggestion = SEARCH_DATABASE.find(s => s.category === category);
+          return (
+            <TouchableOpacity
+              key={category}
+              style={[
+                styles.categoryChip,
+                selectedCategory === category && styles.categoryChipSelected
+              ]}
+              onPress={() => {
+                console.log('🏷️ Category pressed:', category);
+                setSelectedCategory(selectedCategory === category ? null : category);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.categoryEmoji}>{suggestion?.categoryIcon}</Text>
+              <Text style={[styles.categoryChipText, selectedCategory === category && styles.categoryChipTextSelected]}>
+                {category}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
-        {/* DEBUG INFO AND TEST BUTTON */}
-        <View style={{ padding: 20, backgroundColor: '#ffebee' }}>
-          <Text style={{ fontSize: 14, marginBottom: 10, color: '#333' }}>
-            DEBUG: filteredSuggestions.length = {filteredSuggestions.length}
-          </Text>
-          <Text style={{ fontSize: 14, marginBottom: 10, color: '#333' }}>
-            DEBUG: selectedStans.length = {selectedStans.length}
-          </Text>
-          <Text style={{ fontSize: 14, marginBottom: 10, color: '#333' }}>
-            DEBUG: loadingCategories = {loadingCategories.toString()}
-          </Text>
+      {/* Suggestions List */}
+      <FlatList
+        data={filteredSuggestions}
+        renderItem={renderSuggestionCard}
+        keyExtractor={(item) => item.id}
+        numColumns={1}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.suggestionsList}
+      />
+
+      {/* Follow Button */}
+      {selectedStans.length > 0 && (
+        <View style={styles.followButtonContainer}>
           <TouchableOpacity
-            style={{
-              backgroundColor: 'red',
-              padding: 20,
-              borderRadius: 10,
-              alignItems: 'center',
-              marginTop: 10,
-            }}
-            onPress={() => Alert.alert('TOP TEST BUTTON WORKS!', `Suggestions: ${filteredSuggestions.length}, Selected: ${selectedStans.length}`)}
+            style={[
+              styles.followButton,
+              loading && styles.followButtonDisabled
+            ]}
+            onPress={handleFollowStans}
+            disabled={loading}
+            activeOpacity={0.8}
           >
-            <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>
-              🔴 RED TEST BUTTON - TAP ME!
+            <Text style={styles.followButtonText}>
+              {loading ? 'Updating...' : `Follow ${selectedStans.length} ${selectedStans.length === 1 ? 'Interest' : 'Interests'}`}
             </Text>
           </TouchableOpacity>
         </View>
-
-        {/* Search Input */}
-        <View style={styles.searchSection}>
-          <Text style={styles.label}>Search for stans to follow</Text>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search BTS, Taylor Swift, Lakers..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoCorrect={false}
-            placeholderTextColor="#999"
-          />
-        </View>
-
-        {/* Search Results */}
-        <View style={styles.suggestionsSection}>
-            {/* Debug Info */}
-            <View style={styles.debugInfo}>
-              <Text style={styles.debugText}>
-                Debug: {selectedStans.length} selected: [{selectedStans.join(', ')}]
-              </Text>
-            </View>
-            
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>
-                {searchQuery.trim().length > 0 ? 'Search Results' : 'Popular Suggestions'}
-              </Text>
-              <View style={styles.multiSelectControls}>
-                <TouchableOpacity
-                  style={styles.controlButton}
-                  onPress={selectAllVisible}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.controlButtonText}>Select All</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.controlButton}
-                  onPress={clearSelections}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.controlButtonText}>Clear</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            
-            {selectedStans.length > 0 && (
-              <View style={styles.selectedCounter}>
-                <Text style={styles.selectedCounterText}>
-                  {selectedStans.length} selected
-                </Text>
-              </View>
-            )}
-
-            {/* SUPER SIMPLE TEST SELECTION */}
-            <View style={{ padding: 10, backgroundColor: '#ffffcc', marginBottom: 10 }}>
-              <TouchableOpacity
-                style={{ backgroundColor: '#ff9800', padding: 15, borderRadius: 8, marginBottom: 10 }}
-                onPress={() => {
-                  console.log('🧪 TEST: Adding BTS to selection');
-                  setSelectedStans(current => [...current, '1']);
-                }}
-              >
-                <Text style={{ color: 'white', fontWeight: 'bold', textAlign: 'center' }}>
-                  🧪 TEST: Add BTS to selection
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={{ backgroundColor: '#f44336', padding: 15, borderRadius: 8 }}
-                onPress={() => {
-                  console.log('🧪 TEST: Clearing selection');
-                  setSelectedStans([]);
-                }}
-              >
-                <Text style={{ color: 'white', fontWeight: 'bold', textAlign: 'center' }}>
-                  🧪 TEST: Clear selection
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.suggestionsList} showsVerticalScrollIndicator={true}>
-              {filteredSuggestions.map((item) => (
-                <View key={item.id}>
-                  {renderSuggestion({ item })}
-                </View>
-              ))}
-              <View style={{ height: 20 }} />
-            </ScrollView>
-            
-            {/* Fixed Bottom Add Button */}
-            <View style={styles.fixedBottomButton}>
-              <TouchableOpacity
-                style={[styles.bulkAddButton]}
-                onPress={() => {
-                  console.log('🚀 BUTTON PRESSED! Starting handleAddStans...');
-                  Alert.alert('BUTTON WORKS!', `Selected: ${selectedStans.length} stans`);
-                  handleAddStans();
-                }}
-                disabled={false}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.bulkAddButtonText}>
-                  {selectedStans.length > 0 
-                    ? `Start Following (${selectedStans.length})` 
-                    : 'Select stans to follow'
-                  }
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-        {/* ALWAYS VISIBLE BLUE TEST BUTTON */}
-        <View style={{ position: 'absolute', bottom: 100, left: 20, right: 20, backgroundColor: '#e3f2fd', padding: 10, borderRadius: 10 }}>
-          <TouchableOpacity
-            style={{
-              backgroundColor: 'blue',
-              padding: 20,
-              borderRadius: 10,
-              alignItems: 'center',
-            }}
-            onPress={() => {
-              Alert.alert('BLUE BUTTON WORKS!', `Suggestions: ${filteredSuggestions.length}, Selected: ${selectedStans.length}`);
-              handleAddStans();
-            }}
-          >
-            <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>
-              🔵 BLUE TEST + HANDLEADDSTANS
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Snackbar Notification */}
-        {showSnackbar && (
-          <View style={styles.snackbar}>
-            <Text style={styles.snackbarText}>{snackbarMessage}</Text>
-          </View>
-        )}
-      </KeyboardAvoidingView>
+      )}
     </SafeAreaView>
   );
 }
@@ -665,316 +446,203 @@ export default function AddStanScreen({ navigation }: AddStanScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: AppleMusicTheme.colors.background,
-  },
-  keyboardContainer: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: AppleMusicTheme.colors.background,
-  },
-  loadingText: {
-    ...AppleMusicTheme.typography.body,
-    color: AppleMusicTheme.colors.secondary,
-    marginTop: AppleMusicTheme.spacing.sm,
+    backgroundColor: '#ffffff',
   },
   header: {
-    paddingHorizontal: AppleMusicTheme.spacing.screenPadding,
-    paddingVertical: AppleMusicTheme.spacing.screenPadding,
-    borderBottomWidth: 0.33,
-    borderBottomColor: AppleMusicTheme.colors.separator,
-    backgroundColor: AppleMusicTheme.colors.background,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#E5E5E5',
   },
   backButton: {
-    marginBottom: 16,
-    paddingVertical: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   backButtonText: {
-    ...AppleMusicTheme.typography.callout,
-    color: AppleMusicTheme.colors.blue,
-    fontWeight: '500',
-  },
-  title: {
-    ...AppleMusicTheme.typography.title1,
-    color: AppleMusicTheme.colors.primary,
-    marginBottom: AppleMusicTheme.spacing.sm,
-  },
-  subtitle: {
-    ...AppleMusicTheme.typography.body,
-    color: AppleMusicTheme.colors.secondary,
-    lineHeight: 22,
-  },
-  searchSection: {
-    paddingHorizontal: AppleMusicTheme.spacing.screenPadding,
-    paddingVertical: AppleMusicTheme.spacing.md,
-    backgroundColor: AppleMusicTheme.colors.background,
-  },
-  label: {
-    ...AppleMusicTheme.typography.callout,
-    fontWeight: '600',
-    color: AppleMusicTheme.colors.primary,
-    marginBottom: AppleMusicTheme.spacing.sm,
-  },
-  searchInput: {
-    borderWidth: 0,
-    borderRadius: AppleMusicTheme.borderRadius.md,
-    padding: AppleMusicTheme.spacing.md,
-    ...AppleMusicTheme.typography.callout,
-    backgroundColor: AppleMusicTheme.colors.surface,
-    color: AppleMusicTheme.colors.primary,
-  },
-  suggestionsSection: {
-    flex: 1,
-    backgroundColor: AppleMusicTheme.colors.background,
-    marginTop: AppleMusicTheme.spacing.sm,
-    borderRadius: AppleMusicTheme.borderRadius.md,
-    marginHorizontal: AppleMusicTheme.spacing.md,
-    overflow: 'hidden',
-  },
-  sectionTitle: {
-    ...AppleMusicTheme.typography.headline,
-    color: AppleMusicTheme.colors.primary,
-    marginBottom: AppleMusicTheme.spacing.sm,
-  },
-  suggestionsList: {
-    flex: 1,
-  },
-  suggestionCard: {
-    backgroundColor: AppleMusicTheme.colors.background,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: AppleMusicTheme.spacing.listItemPadding,
-    paddingHorizontal: AppleMusicTheme.spacing.screenPadding,
-    borderBottomWidth: 0.33,
-    borderBottomColor: AppleMusicTheme.colors.separator,
-  },
-  suggestionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  suggestionInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  suggestionIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: AppleMusicTheme.colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: AppleMusicTheme.spacing.listItemPadding,
-  },
-  suggestionIconText: {
-    fontSize: 22,
-  },
-  suggestionText: {
-    flex: 1,
-  },
-  suggestionName: {
-    ...AppleMusicTheme.typography.callout,
-    fontWeight: '500',
-    color: AppleMusicTheme.colors.primary,
-    marginBottom: 3,
-  },
-  suggestionCategory: {
-    ...AppleMusicTheme.typography.footnote,
-    color: AppleMusicTheme.colors.secondary,
-    fontWeight: '400',
-  },
-  suggestionDescription: {
-    display: 'none', // Hide for cleaner look
-  },
-  formSection: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingBottom: 24,
-  },
-  inputGroup: {
-    marginBottom: 24,
-  },
-  textArea: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 12,
-    padding: 16,
     fontSize: 16,
-    backgroundColor: '#f9f9f9',
-    height: 100,
+    color: '#333',
+    fontWeight: '600',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
     color: '#000',
   },
-  categoriesContainer: {
+  placeholder: {
+    width: 32,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#666',
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 20,
+    lineHeight: 20,
+  },
+  searchContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    height: 44,
+  },
+  searchIcon: {
+    fontSize: 16,
+    marginRight: 12,
+    color: '#999',
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#000',
+    height: 44,
+  },
+  categoryScrollContainer: {
+    maxHeight: 50,
+    marginBottom: 16,
+  },
+  categoryContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
     gap: 8,
   },
   categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    backgroundColor: '#F5F5F5',
+    paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    marginBottom: 8,
+    marginRight: 8,
   },
-  categoryIcon: {
-    fontSize: 16,
+  categoryChipSelected: {
+    backgroundColor: '#000',
+  },
+  categoryChipPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.98 }],
+  },
+  categoryEmoji: {
+    fontSize: 14,
     marginRight: 6,
   },
-  categoryText: {
+  categoryChipText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#333',
   },
-  categoryTextSelected: {
-    color: '#ffffff',
-    fontWeight: '600',
-  },
-  addButton: {
-    backgroundColor: '#000000',
-    borderRadius: 12,
-    padding: 18,
-    alignItems: 'center',
-    marginTop: 'auto',
-  },
-  addButtonDisabled: {
-    backgroundColor: '#cccccc',
-  },
-  addButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  manualAddButton: {
-    backgroundColor: '#f0f0f0',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 24,
-  },
-  manualAddText: {
-    color: '#666',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  // Multi-select styles
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  multiSelectControls: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  controlButton: {
-    paddingHorizontal: AppleMusicTheme.spacing.sm,
-    paddingVertical: AppleMusicTheme.spacing.xs,
-    borderRadius: AppleMusicTheme.borderRadius.xs,
-    backgroundColor: AppleMusicTheme.colors.surfaceSecondary,
-  },
-  controlButtonText: {
-    ...AppleMusicTheme.typography.caption,
-    color: AppleMusicTheme.colors.secondary,
-    fontWeight: '500',
-  },
-  selectedCounter: {
-    backgroundColor: AppleMusicTheme.colors.surface,
-    paddingHorizontal: AppleMusicTheme.spacing.sm,
-    paddingVertical: AppleMusicTheme.spacing.xs,
-    borderRadius: AppleMusicTheme.borderRadius.xs,
-    alignSelf: 'flex-start',
-    marginBottom: AppleMusicTheme.spacing.sm,
-  },
-  selectedCounterText: {
-    ...AppleMusicTheme.typography.caption,
-    color: AppleMusicTheme.colors.accent,
-    fontWeight: '600',
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1.5,
-    borderColor: AppleMusicTheme.colors.secondary,
-    backgroundColor: AppleMusicTheme.colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: AppleMusicTheme.spacing.sm,
-  },
-  checkboxSelected: {
-    backgroundColor: AppleMusicTheme.colors.accent,
-    borderColor: AppleMusicTheme.colors.accent,
-  },
-  checkmark: {
+  categoryChipTextSelected: {
     color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
+  },
+  suggestionsList: {
+    paddingHorizontal: 20,
+    paddingBottom: 100,
+  },
+  suggestionCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    overflow: 'hidden',
   },
   suggestionCardSelected: {
-    backgroundColor: AppleMusicTheme.colors.surface,
-    borderLeftWidth: 4,
-    borderLeftColor: AppleMusicTheme.colors.accent,
+    borderColor: '#000',
+    borderWidth: 2,
   },
-  fixedBottomButton: {
-    backgroundColor: AppleMusicTheme.colors.background,
-    paddingHorizontal: AppleMusicTheme.spacing.screenPadding,
-    paddingVertical: AppleMusicTheme.spacing.sm,
-    borderTopWidth: 0.33,
-    borderTopColor: AppleMusicTheme.colors.separator,
+  suggestionCardPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.98 }],
   },
-  bulkAddButton: {
-    backgroundColor: AppleMusicTheme.colors.accent,
-    borderRadius: AppleMusicTheme.borderRadius.button,
-    padding: AppleMusicTheme.spacing.md,
+  suggestionTouchable: {
+    flex: 1,
+  },
+  suggestionContent: {
+    padding: 16,
+  },
+  suggestionHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
-  bulkAddButtonText: {
-    ...AppleMusicTheme.typography.callout,
-    color: '#ffffff',
+  categoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  categoryBadgeIcon: {
+    fontSize: 12,
+    marginRight: 4,
+  },
+  categoryBadgeText: {
+    fontSize: 12,
     fontWeight: '600',
   },
-  // Debug styles
-  debugInfo: {
-    backgroundColor: '#fff3cd',
-    padding: 8,
-    marginBottom: 8,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#ffeaa7',
+  checkCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#E5E5E5',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  debugText: {
-    fontSize: 12,
-    color: '#856404',
-    fontFamily: 'monospace',
+  checkCircleSelected: {
+    backgroundColor: '#000',
+    borderColor: '#000',
   },
-  // Snackbar styles
-  snackbar: {
+  checkMark: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  suggestionName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 6,
+  },
+  suggestionDescription: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+  },
+  followButtonContainer: {
     position: 'absolute',
-    bottom: 120,
+    bottom: Platform.OS === 'ios' ? 34 : 20,
     left: 20,
     right: 20,
-    backgroundColor: '#323232',
-    borderRadius: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    zIndex: 1000,
   },
-  snackbarText: {
-    color: '#ffffff',
+  followButton: {
+    backgroundColor: '#000',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  followButtonDisabled: {
+    opacity: 0.6,
+  },
+  followButtonPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.98 }],
+  },
+  followButtonText: {
+    color: '#fff',
     fontSize: 16,
-    fontWeight: '500',
-    textAlign: 'center',
+    fontWeight: '700',
   },
 });

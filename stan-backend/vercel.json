@@ -1,26 +1,24 @@
 {
-  "rewrites": [
+  "version": 2,
+  "builds": [
     {
-      "source": "/api/:path*",
-      "destination": "/api/:path*"
-    },
-    {
-      "source": "/_expo/:path*",
-      "destination": "/_expo/:path*"
-    },
-    {
-      "source": "/assets/:path*",
-      "destination": "/assets/:path*"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "api/index.py",
+      "use": "@vercel/python"
     }
   ],
-  "crons": [
+  "routes": [
     {
-      "path": "/api/generate-real-briefings",
-      "schedule": "0 6 * * *"
+      "src": "/(.*)",
+      "dest": "api/index.py"
     }
-  ]
+  ],
+  "env": {
+    "PYTHON_VERSION": "3.11"
+  },
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  }
 }

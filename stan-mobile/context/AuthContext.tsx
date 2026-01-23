@@ -1,11 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   isNewUser: boolean;
+  isAnonymous: boolean;
+  anonymousId: string | null;
   signUp: (email: string, password: string, username: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -18,17 +21,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isNewUser, setIsNewUser] = useState(false);
+  const [isAnonymous, setIsAnonymous] = useState(true);
+  const [anonymousId, setAnonymousId] = useState<string | null>(null);
 
   useEffect(() => {
     console.log('AuthProvider initializing...');
     
-    // Get initial session
+    // Get initial session or create anonymous user
     const getInitialSession = async () => {
       try {
         console.log('Getting initial session...');
+        
+        // First check for existing session
         const { data: { session }, error } = await supabase.auth.getSession();
         console.log('Initial session result:', { session: !!session, error, userId: session?.user?.id });
-        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          setUser(session.user);
+          setIsAnonymous(false);
+        } else {
+          // No session, create/get anonymous ID
+          const storedAnonymousId = await AsyncStorage.getItem('anonymousId');
+          if (storedAnonymousId) {
+            console.log('Found existing anonymous ID:', storedAnonymousId);
+            setAnonymousId(storedAnonymousId);
+          } else {
+            // Generate new anonymous ID
+            const newAnonymousId = `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            await AsyncStorage.setItem('anonymousId', newAnonymousId);
+            console.log('Created new anonymous ID:', newAnonymousId);
+            setAnonymousId(newAnonymousId);
+          }
+          setIsAnonymous(true);
+        }
       } catch (error) {
         console.error('Error getting initial session:', error);
       } finally {
@@ -50,6 +75,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (event === 'SIGNED_IN' && session?.user) {
           console.log('✅ User successfully signed in - should redirect to home');
+          setIsAnonymous(false);
+          // Clear anonymous data when user signs in
+          await AsyncStorage.removeItem('anonymousId');
+          setAnonymousId(null);
+        } else if (event === 'SIGNED_OUT') {
+          // Create new anonymous session after sign out
+          const newAnonymousId = `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          await AsyncStorage.setItem('anonymousId', newAnonymousId);
+          setAnonymousId(newAnonymousId);
+          setIsAnonymous(true);
         }
       }
     );
@@ -128,6 +163,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         loading,
         isNewUser,
+        isAnonymous,
+        anonymousId,
         signUp,
         signIn,
         signOut,

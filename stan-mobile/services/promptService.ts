@@ -28,7 +28,9 @@ interface PromptTemplate {
   };
 }
 
-const BASE_URL = 'http://10.0.0.211:3000/api';
+import { API_URL } from '../config/api';
+
+const BASE_URL = `${API_URL}/api`;
 
 export const promptService = {
   // Get custom prompt for a stan

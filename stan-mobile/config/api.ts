@@ -1,5 +1,5 @@
-const DEV_API_URL = 'http://localhost:3000';
-const PROD_API_URL = 'https://stan-peach.vercel.app';
+const DEV_API_URL = 'http://localhost:8000';
+const PROD_API_URL = 'https://stan-backend-7btyucqrz-haleys-projects-1932fed0.vercel.app';
 
 // Auto-detect environment
 const isProduction = !__DEV__;

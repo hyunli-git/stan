@@ -14,7 +14,7 @@ interface ProfileScreenProps {
 }
 
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isAnonymous, anonymousId } = useAuth();
 
   const handleSignOut = async () => {
     Alert.alert(
@@ -44,14 +44,45 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>👤 Profile</Text>
-        <Text style={styles.subtitle}>Manage your account and preferences</Text>
+        <Text style={styles.subtitle}>
+          {isAnonymous ? 'Create an account to save your data' : 'Manage your account and preferences'}
+        </Text>
       </View>
 
       <View style={styles.content}>
-        <View style={styles.userInfo}>
-          <Text style={styles.userEmail}>{user?.email}</Text>
-          <Text style={styles.userLabel}>Signed in as</Text>
-        </View>
+        {isAnonymous ? (
+          <>
+            <View style={styles.anonymousCard}>
+              <Text style={styles.anonymousIcon}>👻</Text>
+              <Text style={styles.anonymousTitle}>You're browsing anonymously</Text>
+              <Text style={styles.anonymousText}>
+                Your data is stored locally on this device. Sign up to save your stans and access them anywhere!
+              </Text>
+              <Text style={styles.anonymousId}>Device ID: {anonymousId?.slice(-8)}</Text>
+            </View>
+            
+            <TouchableOpacity 
+              style={styles.primaryButton}
+              onPress={() => navigation.navigate('Signup')}
+            >
+              <Text style={styles.primaryButtonText}>🚀 Create Account</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.secondaryButton}
+              onPress={() => navigation.navigate('Login')}
+            >
+              <Text style={styles.secondaryButtonText}>🔑 Sign In</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <View style={styles.userInfo}>
+              <Text style={styles.userEmail}>{user?.email}</Text>
+              <Text style={styles.userLabel}>Signed in as</Text>
+            </View>
+          </>
+        )}
 
         <View style={styles.menuSection}>
           <TouchableOpacity 
@@ -91,12 +122,14 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity 
-          style={styles.signOutButton}
-          onPress={handleSignOut}
-        >
-          <Text style={styles.signOutButtonText}>🚪 Sign Out</Text>
-        </TouchableOpacity>
+        {!isAnonymous && (
+          <TouchableOpacity 
+            style={styles.signOutButton}
+            onPress={handleSignOut}
+          >
+            <Text style={styles.signOutButtonText}>🚪 Sign Out</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -191,6 +224,62 @@ const styles = StyleSheet.create({
   },
   signOutButtonText: {
     color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  anonymousCard: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  anonymousIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  anonymousTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  anonymousText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  anonymousId: {
+    fontSize: 12,
+    color: '#999',
+    fontFamily: 'monospace',
+  },
+  primaryButton: {
+    backgroundColor: '#000',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  secondaryButton: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#000',
+    marginBottom: 24,
+  },
+  secondaryButtonText: {
+    color: '#000',
     fontSize: 16,
     fontWeight: '600',
   },

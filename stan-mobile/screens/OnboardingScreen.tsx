@@ -138,7 +138,7 @@ export default function OnboardingScreen({ navigation }: OnboardingScreenProps) 
       if (insertedStans && insertedStans.length > 0) {
         try {
           console.log('🎯 Generating initial briefings for new stans...');
-          const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://stan-peach.vercel.app';
+          const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://stan-backend-7btyucqrz-haleys-projects-1932fed0.vercel.app';
           
           // Generate briefings for each new stan
           await Promise.all(insertedStans.map(async (stan) => {

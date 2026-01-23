@@ -4,6 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Platform } from 'react-native';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Import screens
@@ -18,6 +19,7 @@ import PromptManagerScreen from './screens/PromptManagerScreen';
 
 // Import test app for development
 import TestApp from './TestApp';
+import DebugApp from './DebugApp';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -80,48 +82,42 @@ function AppNavigator() {
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {!user ? (
-          // Auth screens
+        {/* Main app screens - no login required */}
+        {isNewUser && user ? (
+          // New logged-in users see onboarding first
           <>
+            <Stack.Screen 
+              name="Onboarding" 
+              component={OnboardingScreen}
+              options={{
+                presentation: 'card',
+                gestureEnabled: false,
+              }}
+            />
+            <Stack.Screen name="MainTabs" component={MainTabs} />
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Signup" component={SignupScreen} />
+            <Stack.Screen name="Briefing" component={BriefingScreen} />
+            <Stack.Screen name="PromptManager" component={PromptManagerScreen} />
+            <Stack.Screen name="TestApp" component={TestApp} />
           </>
         ) : (
-          // Main app screens
+          // Everyone else goes directly to MainTabs (including anonymous users)
           <>
-            {isNewUser ? (
-              // New users see onboarding first
-              <>
-                <Stack.Screen 
-                  name="Onboarding" 
-                  component={OnboardingScreen}
-                  options={{
-                    presentation: 'card',
-                    gestureEnabled: false,
-                  }}
-                />
-                <Stack.Screen name="MainTabs" component={MainTabs} />
-                <Stack.Screen name="Briefing" component={BriefingScreen} />
-                <Stack.Screen name="PromptManager" component={PromptManagerScreen} />
-                <Stack.Screen name="TestApp" component={TestApp} />
-              </>
-            ) : (
-              // Returning users go directly to MainTabs
-              <>
-                <Stack.Screen name="MainTabs" component={MainTabs} />
-                <Stack.Screen 
-                  name="Onboarding" 
-                  component={OnboardingScreen}
-                  options={{
-                    presentation: 'card',
-                    gestureEnabled: false,
-                  }}
-                />
-                <Stack.Screen name="Briefing" component={BriefingScreen} />
-                <Stack.Screen name="PromptManager" component={PromptManagerScreen} />
-                <Stack.Screen name="TestApp" component={TestApp} />
-              </>
-            )}
+            <Stack.Screen name="MainTabs" component={MainTabs} />
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Signup" component={SignupScreen} />
+            <Stack.Screen 
+              name="Onboarding" 
+              component={OnboardingScreen}
+              options={{
+                presentation: 'card',
+                gestureEnabled: false,
+              }}
+            />
+            <Stack.Screen name="Briefing" component={BriefingScreen} />
+            <Stack.Screen name="PromptManager" component={PromptManagerScreen} />
+            <Stack.Screen name="TestApp" component={TestApp} />
           </>
         )}
       </Stack.Navigator>
@@ -130,6 +126,9 @@ function AppNavigator() {
 }
 
 export default function App() {
+  console.log('🚀 STAN App loaded');
+  console.log('Platform:', Platform.OS);
+  
   return (
     <SafeAreaProvider>
       <AuthProvider>
