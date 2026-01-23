@@ -1,15 +1,14 @@
-"""
-Vercel serverless function entry point for STAN backend
-"""
+from fastapi import FastAPI
 
-import sys
-import os
+app = FastAPI()
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+@app.get("/")
+def read_root():
+    return {"Hello": "World", "status": "OK"}
 
-# Import the FastAPI app from main.py
-from main import app
+@app.get("/api/health")
+def health():
+    return {"status": "healthy"}
 
-# Export for Vercel
+# Vercel will automatically handle this
 handler = app
