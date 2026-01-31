@@ -1,9 +1,13 @@
 import 'package:dio/dio.dart';
 
-// API URL injected at compile time via --dart-define
-const String apiBaseUrl = String.fromEnvironment(
-  'API_URL',
-  defaultValue: 'https://stan-backend-production.up.railway.app',
+// Supabase Edge Functions URL
+const String supabaseUrl = String.fromEnvironment(
+  'SUPABASE_URL',
+  defaultValue: 'https://tdzlsdpubnicsoxqthzl.supabase.co',
+);
+const String supabaseAnonKey = String.fromEnvironment(
+  'SUPABASE_ANON_KEY',
+  defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkemxzZHB1Ym5pY3NveHF0aHpsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3Mzg0MDgsImV4cCI6MjA4NTMxNDQwOH0.C-nkm1xAeXu_NuWymaUDE9F4UGtdClfhrumQT-8dNMA',
 );
 
 class ApiService {
@@ -11,16 +15,17 @@ class ApiService {
   factory ApiService() => _instance;
 
   late final Dio _dio;
-  final String baseUrl = apiBaseUrl;
+  final String functionsUrl = '$supabaseUrl/functions/v1';
 
   ApiService._internal() {
     _dio = Dio(
       BaseOptions(
-        baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(seconds: 30),
+        baseUrl: functionsUrl,
+        connectTimeout: const Duration(seconds: 60),
+        receiveTimeout: const Duration(seconds: 60),
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': 'Bearer $supabaseAnonKey',
         },
       ),
     );
@@ -34,31 +39,15 @@ class ApiService {
     );
   }
 
-  // Health check
-  Future<Map<String, dynamic>> healthCheck() async {
-    try {
-      final response = await _dio.get('/api/health');
-      return response.data;
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  // Generate briefing
+  // Generate briefing via Supabase Edge Function
   Future<Map<String, dynamic>> generateBriefing({
     required String stanName,
     String? userId,
   }) async {
     try {
       final response = await _dio.post(
-        '/api/generate-briefing',
-        data: {
-          'stan': {
-            'name': stanName,
-            'categories': {'primary': 'general'},
-          },
-          'userId': userId,
-        },
+        '/generate-briefing',
+        data: {'stanName': stanName},
       );
       return response.data;
     } catch (e) {
@@ -66,26 +55,20 @@ class ApiService {
     }
   }
 
-  // Get popular stans
+  // Get popular stans (returns static data for now)
   Future<Map<String, dynamic>> getPopularStans() async {
-    try {
-      final response = await _dio.get('/api/popular-stans');
-      return response.data;
-    } catch (e) {
-      rethrow;
-    }
+    return {
+      'popular_stans': {
+        'K-Pop': ['BTS', 'BLACKPINK', 'Stray Kids', 'NewJeans', 'aespa'],
+        'Music': ['Taylor Swift', 'Olivia Rodrigo'],
+        'Entertainment': ['Marvel'],
+      }
+    };
   }
 
-  // Get today's briefings
+  // Get today's briefings (empty for guests)
   Future<List<dynamic>> getTodaysBriefings(String? userId) async {
-    try {
-      final response = await _dio.get(
-        '/api/briefings/today',
-        queryParameters: userId != null ? {'userId': userId} : null,
-      );
-      return response.data['briefings'] ?? [];
-    } catch (e) {
-      rethrow;
-    }
+    // TODO: Implement with Supabase database
+    return [];
   }
 }
