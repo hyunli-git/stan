@@ -33,9 +33,6 @@ dependencies:
   url_launcher: ^6.2.2
   share_plus: ^7.2.1
 
-  # Environment
-  flutter_dotenv: ^5.1.0
-
   # Fonts
   google_fonts: ^6.1.0
 
@@ -46,6 +43,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-
-  assets:
-    - .env.example

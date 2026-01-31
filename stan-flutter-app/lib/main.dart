@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -9,16 +8,23 @@ import 'screens/login_screen.dart';
 import 'services/auth_service.dart';
 import 'services/briefing_service.dart';
 
+// Environment variables injected at compile time via --dart-define
+const String supabaseUrl = String.fromEnvironment(
+  'SUPABASE_URL',
+  defaultValue: 'https://tdzlsdpubnicsoxqthzl.supabase.co',
+);
+const String supabaseAnonKey = String.fromEnvironment(
+  'SUPABASE_ANON_KEY',
+  defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkemxzZHB1Ym5pY3NveHF0aHpsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3Mzg0MDgsImV4cCI6MjA4NTMxNDQwOH0.C-nkm1xAeXu_NuWymaUDE9F4UGtdClfhrumQT-8dNMA',
+);
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables
-  await dotenv.load(fileName: ".env");
-
-  // Initialize Supabase
+  // Initialize Supabase with compile-time constants
   await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL']!,
-    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+    url: supabaseUrl,
+    anonKey: supabaseAnonKey,
   );
 
   runApp(const STANApp());

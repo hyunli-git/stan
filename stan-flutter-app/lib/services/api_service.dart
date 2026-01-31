@@ -1,12 +1,17 @@
 import 'package:dio/dio.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+// API URL injected at compile time via --dart-define
+const String apiBaseUrl = String.fromEnvironment(
+  'API_URL',
+  defaultValue: 'https://stan-backend-production.up.railway.app',
+);
 
 class ApiService {
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
 
   late final Dio _dio;
-  final String baseUrl = dotenv.env['API_URL'] ?? 'http://localhost:8000';
+  final String baseUrl = apiBaseUrl;
 
   ApiService._internal() {
     _dio = Dio(
