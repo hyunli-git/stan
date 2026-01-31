@@ -56,6 +56,7 @@ class BriefingService extends ChangeNotifier {
       _briefings = briefingsData.map((data) {
         return Briefing.fromJson({
           'stan_name': data['stan_name'],
+          'created_at': data['created_at'] ?? DateTime.now().toIso8601String(),
           ...data['briefing'],
         });
       }).toList();
@@ -80,7 +81,11 @@ class BriefingService extends ChangeNotifier {
         userId: userId,
       );
 
-      final briefing = Briefing.fromJson(response);
+      final briefing = Briefing.fromJson({
+        'stan_name': stanName,
+        'created_at': DateTime.now().toIso8601String(),
+        ...response,
+      });
 
       _isLoading = false;
       notifyListeners();

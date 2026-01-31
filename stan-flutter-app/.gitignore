@@ -5,7 +5,11 @@
 .packages
 .pub-cache/
 .pub/
-build/
+build/android/
+build/ios/
+build/macos/
+build/linux/
+build/windows/
 flutter_sdk/
 
 # Generated files

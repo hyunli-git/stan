@@ -5,6 +5,8 @@ class Briefing {
   final List<Topic> topics;
   final String generatedBy;
   final Map<String, dynamic>? metadata;
+  final String stanName;
+  final DateTime date;
 
   Briefing({
     required this.content,
@@ -13,6 +15,8 @@ class Briefing {
     required this.topics,
     required this.generatedBy,
     this.metadata,
+    required this.stanName,
+    required this.date,
   });
 
   factory Briefing.fromJson(Map<String, dynamic> json) {
@@ -26,6 +30,10 @@ class Briefing {
           [],
       generatedBy: json['generated_by'] as String? ?? 'Unknown',
       metadata: json['metadata'] as Map<String, dynamic>?,
+      stanName: json['stan_name'] as String? ?? 'Unknown',
+      date: json['created_at'] != null
+          ? DateTime.parse(json['created_at'] as String)
+          : DateTime.now(),
     );
   }
 
@@ -37,6 +45,8 @@ class Briefing {
       'topics': topics.map((t) => t.toJson()).toList(),
       'generated_by': generatedBy,
       'metadata': metadata,
+      'stan_name': stanName,
+      'created_at': date.toIso8601String(),
     };
   }
 }
