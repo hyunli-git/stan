@@ -22,7 +22,7 @@ echo "=== Getting Dependencies ==="
 flutter pub get
 
 echo "=== Building for Web ==="
-flutter build web --release --web-renderer html
+flutter build web --release
 
 echo "=== Build Complete ==="
 ls -la build/web/
