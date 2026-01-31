@@ -75,24 +75,8 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<AuthState>(
-      stream: Supabase.instance.client.auth.onAuthStateChange,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
-          );
-        }
-
-        final session = snapshot.data?.session;
-        if (session != null) {
-          return const HomeScreen();
-        }
-
-        return const LoginScreen();
-      },
-    );
+    // Skip login - go directly to HomeScreen
+    // Users can use the app without logging in
+    return const HomeScreen();
   }
 }
