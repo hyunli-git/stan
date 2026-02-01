@@ -1,0 +1,17 @@
+name: Daily Briefings Batch Generation
+
+on:
+  schedule:
+    # Run every day at 6:00 AM UTC (3:00 PM KST)
+    - cron: '0 6 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger batch generation
+        run: |
+          curl -X POST "${{ secrets.SUPABASE_URL }}/functions/v1/batch-generate" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json"

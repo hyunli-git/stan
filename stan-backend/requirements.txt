@@ -18,11 +18,20 @@ pydantic>=2.9.0
 httpx>=0.28.1
 aiohttp>=3.10.5
 
-# Performance & Caching (optional)
+# Caching (REQUIRED for production - cost optimization)
 redis>=5.0.0
 
-# Media processing for multimodal (optional)
-Pillow>=10.0.0
+# Structured Logging
+structlog>=24.1.0
+python-json-logger>=2.0.7
 
-# Analytics
-prometheus-client>=0.20.0
+# Rate Limiting
+slowapi>=0.1.9
+
+# Error Tracking (optional but recommended)
+sentry-sdk[fastapi]>=1.40.0
+
+# Testing
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+httpx>=0.28.1  # For testing async endpoints

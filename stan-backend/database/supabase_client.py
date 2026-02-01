@@ -17,12 +17,12 @@ class SupabaseClient:
     
     def _initialize_client(self) -> Client:
         """Initialize Supabase client."""
-        supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+        supabase_url = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
         supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-        
+
         if not supabase_url or not supabase_key:
             raise ValueError("Missing Supabase environment variables")
-        
+
         return create_client(supabase_url, supabase_key)
     
     async def get_custom_prompt(self, user_id: str, stan_id: str) -> Optional[Dict[str, Any]]:

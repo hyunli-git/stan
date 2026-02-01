@@ -30,7 +30,6 @@ class ApiService {
       ),
     );
 
-    // Add interceptors for logging
     _dio.interceptors.add(
       LogInterceptor(
         requestBody: true,
@@ -39,7 +38,59 @@ class ApiService {
     );
   }
 
-  // Generate briefing via Supabase Edge Function
+  // Get today's feed (pre-generated briefings)
+  Future<List<dynamic>> getFeed(String? userId) async {
+    try {
+      String url = '/feed';
+      if (userId != null) {
+        url += '?user_id=$userId';
+      }
+      final response = await _dio.get(url);
+      return response.data['briefings'] ?? [];
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // Get all artists
+  Future<List<dynamic>> getArtists(String? userId) async {
+    try {
+      String url = '/artists';
+      if (userId != null) {
+        url += '?user_id=$userId';
+      }
+      final response = await _dio.get(url);
+      return response.data['artists'] ?? [];
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // Follow an artist
+  Future<void> followArtist(String userId, String artistId) async {
+    try {
+      await _dio.post('/follow', data: {
+        'user_id': userId,
+        'artist_id': artistId,
+      });
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // Unfollow an artist
+  Future<void> unfollowArtist(String userId, String artistId) async {
+    try {
+      await _dio.post('/unfollow', data: {
+        'user_id': userId,
+        'artist_id': artistId,
+      });
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // Generate briefing on-demand (legacy, still useful for testing)
   Future<Map<String, dynamic>> generateBriefing({
     required String stanName,
     String? userId,
@@ -53,22 +104,5 @@ class ApiService {
     } catch (e) {
       rethrow;
     }
-  }
-
-  // Get popular stans (returns static data for now)
-  Future<Map<String, dynamic>> getPopularStans() async {
-    return {
-      'popular_stans': {
-        'K-Pop': ['BTS', 'BLACKPINK', 'Stray Kids', 'NewJeans', 'aespa'],
-        'Music': ['Taylor Swift', 'Olivia Rodrigo'],
-        'Entertainment': ['Marvel'],
-      }
-    };
-  }
-
-  // Get today's briefings (empty for guests)
-  Future<List<dynamic>> getTodaysBriefings(String? userId) async {
-    // TODO: Implement with Supabase database
-    return [];
   }
 }
